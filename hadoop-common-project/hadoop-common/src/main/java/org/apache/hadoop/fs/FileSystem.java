@@ -78,11 +78,12 @@ import org.apache.hadoop.util.Progressable;
 import org.apache.hadoop.util.ReflectionUtils;
 import org.apache.hadoop.util.ShutdownHookManager;
 import org.apache.hadoop.util.StringUtils;
-import org.apache.htrace.core.Tracer;
-import org.apache.htrace.core.TraceScope;
 
 import com.google.common.base.Preconditions;
 import com.google.common.annotations.VisibleForTesting;
+import io.opentracing.Tracer;
+import io.opentracing.Scope;
+import io.opentracing.util.GlobalTracer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -3324,9 +3325,9 @@ public abstract class FileSystem extends Configured
    */
   private static FileSystem createFileSystem(URI uri, Configuration conf)
       throws IOException {
-    Tracer tracer = FsTracer.get(conf);
-    try(TraceScope scope = tracer.newScope("FileSystem#createFileSystem")) {
-      scope.addKVAnnotation("scheme", uri.getScheme());
+    Tracer tracer = GlobalTracer.get(); // Tracer has been already registered.
+    try (Scope scope = tracer.buildSpan("FileSystem#createFileSystem").startActive(true)) {
+      scope.span().setTag("scheme", uri.getScheme());
       Class<?> clazz = getFileSystemClass(uri.getScheme(), conf);
       FileSystem fs = (FileSystem)ReflectionUtils.newInstance(clazz, conf);
       fs.initialize(uri, conf);

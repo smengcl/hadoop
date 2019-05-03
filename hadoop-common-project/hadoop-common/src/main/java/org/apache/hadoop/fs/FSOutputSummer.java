@@ -21,7 +21,10 @@ package org.apache.hadoop.fs;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.util.DataChecksum;
-import org.apache.htrace.core.TraceScope;
+
+import io.opentracing.Span;
+import io.opentracing.Scope;
+import io.opentracing.util.GlobalTracer;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -199,7 +202,7 @@ abstract public class FSOutputSummer extends OutputStream {
     return sum;
   }
 
-  protected TraceScope createWriteTraceScope() {
+  protected Span createWriteSpan() {
     return null;
   }
 
@@ -209,7 +212,12 @@ abstract public class FSOutputSummer extends OutputStream {
   private void writeChecksumChunks(byte b[], int off, int len)
   throws IOException {
     sum.calculateChunkedSums(b, off, len, checksum, 0);
-    TraceScope scope = createWriteTraceScope();
+    Span span = createWriteSpan();
+    Scope scope = null;
+    if (span != null) {
+      scope = GlobalTracer.get().scopeManager().activate(span, true);
+    }
+
     try {
       for (int i = 0; i < len; i += sum.getBytesPerChecksum()) {
         int chunkLen = Math.min(sum.getBytesPerChecksum(), len - i);

@@ -23,8 +23,9 @@ import java.io.IOException;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.fs.BatchedRemoteIterator;
-import org.apache.htrace.core.TraceScope;
-import org.apache.htrace.core.Tracer;
+
+import io.opentracing.Tracer;
+import io.opentracing.Scope;
 
 /**
  * CachePoolIterator is a remote iterator that iterates cache pools.
@@ -47,7 +48,7 @@ public class CachePoolIterator
   @Override
   public BatchedEntries<CachePoolEntry> makeRequest(String prevKey)
       throws IOException {
-    try (TraceScope ignored = tracer.newScope("listCachePools")) {
+    try (Scope ignored = tracer.buildSpan("listCachePools").startActive(true)) {
       return namenode.listCachePools(prevKey);
     }
   }

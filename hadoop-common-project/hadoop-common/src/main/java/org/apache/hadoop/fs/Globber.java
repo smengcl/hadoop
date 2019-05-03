@@ -25,9 +25,11 @@ import java.util.List;
 
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
+import org.apache.hadoop.tracing.TraceUtils;
 
-import org.apache.htrace.core.TraceScope;
-import org.apache.htrace.core.Tracer;
+import io.opentracing.Scope;
+import io.opentracing.Tracer;
+import io.opentracing.util.GlobalTracer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -56,7 +58,7 @@ class Globber {
     this.fc = fc;
     this.pathPattern = pathPattern;
     this.filter = filter;
-    this.tracer = fc.getTracer();
+    this.tracer = TraceUtils.createAndRegisterTracer();
   }
 
   private FileStatus getFileStatus(Path path) throws IOException {
@@ -143,8 +145,8 @@ class Globber {
   }
 
   public FileStatus[] glob() throws IOException {
-    TraceScope scope = tracer.newScope("Globber#glob");
-    scope.addKVAnnotation("pattern", pathPattern.toUri().getPath());
+    Scope scope = tracer.buildSpan("Globber#glob").startActive(true);
+    scope.span().setTag("pattern", pathPattern.toUri().getPath());
     try {
       return doGlob();
     } finally {

@@ -35,10 +35,11 @@ import org.apache.hadoop.security.token.SecretManager;
 import org.apache.hadoop.security.token.TokenIdentifier;
 import org.apache.hadoop.util.Time;
 import org.apache.hadoop.util.concurrent.AsyncGet;
-import org.apache.htrace.core.TraceScope;
-import org.apache.htrace.core.Tracer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import io.opentracing.Scope;
+import io.opentracing.util.GlobalTracer;
 
 import javax.net.SocketFactory;
 import java.io.IOException;
@@ -212,12 +213,7 @@ public class ProtobufRpcEngine implements RpcEngine {
       // if Tracing is on then start a new span for this rpc.
       // guard it in the if statement to make sure there isn't
       // any extra string manipulation.
-      Tracer tracer = Tracer.curThreadTracer();
-      TraceScope traceScope = null;
-      if (tracer != null) {
-        traceScope = tracer.newScope(RpcClientUtil.methodToTraceString(method));
-      }
-
+      Scope scope = GlobalTracer.get().buildSpan(RpcClientUtil.methodToTraceString(method)).startActive(true);
       RequestHeaderProto rpcRequestHeader = constructRpcRequestHeader(method);
       
       if (LOG.isTraceEnabled()) {
@@ -240,13 +236,11 @@ public class ProtobufRpcEngine implements RpcEngine {
               remoteId + ": " + method.getName() +
                 " {" + e + "}");
         }
-        if (traceScope != null) {
-          traceScope.addTimelineAnnotation("Call got exception: " +
+        scope.span().log("Call got exception: " +
               e.toString());
-        }
         throw new ServiceException(e);
       } finally {
-        if (traceScope != null) traceScope.close();
+        scope.close();
       }
 
       if (LOG.isDebugEnabled()) {

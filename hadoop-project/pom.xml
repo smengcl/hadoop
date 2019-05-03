@@ -1157,6 +1157,27 @@
         <version>0.1.54</version>
       </dependency>
       <dependency>
+        <groupId>io.opentracing</groupId>
+        <artifactId>opentracing-api</artifactId>
+        <version>0.31.0</version>
+      </dependency>
+      <dependency>
+        <groupId>io.opentracing</groupId>
+        <artifactId>opentracing-util</artifactId>
+        <version>0.31.0</version>
+      </dependency>
+      <dependency>
+        <groupId>io.opentracing.brave</groupId>
+        <artifactId>brave-opentracing</artifactId>
+        <version>0.33.0</version>
+      </dependency>
+      <dependency>
+        <groupId>io.zipkin.reporter2</groupId>
+        <artifactId>zipkin-sender-urlconnection</artifactId>
+        <version>2.7.8</version>
+      </dependency>
+
+      <dependency>
         <groupId>org.apache.htrace</groupId>
         <artifactId>htrace-core</artifactId>
         <version>3.1.0-incubating</version>

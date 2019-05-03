@@ -32,7 +32,6 @@ import org.apache.hadoop.hdfs.protocol.StripedBlockInfo;
 import org.apache.hadoop.hdfs.protocol.proto.DataTransferProtos.BaseHeaderProto;
 import org.apache.hadoop.hdfs.protocol.proto.DataTransferProtos.CachingStrategyProto;
 import org.apache.hadoop.hdfs.protocol.proto.DataTransferProtos.ClientOperationHeaderProto;
-import org.apache.hadoop.hdfs.protocol.proto.DataTransferProtos.DataTransferTraceInfoProto;
 import org.apache.hadoop.hdfs.protocol.proto.DataTransferProtos.OpBlockChecksumProto;
 import org.apache.hadoop.hdfs.protocol.proto.DataTransferProtos.OpBlockGroupChecksumProto;
 import org.apache.hadoop.hdfs.protocol.proto.DataTransferProtos.OpCopyBlockProto;
@@ -46,19 +45,20 @@ import org.apache.hadoop.hdfs.protocol.proto.DataTransferProtos.ShortCircuitShmR
 import org.apache.hadoop.hdfs.protocolPB.PBHelperClient;
 import org.apache.hadoop.hdfs.server.datanode.CachingStrategy;
 import org.apache.hadoop.hdfs.shortcircuit.ShortCircuitShm.SlotId;
-import org.apache.htrace.core.SpanId;
-import org.apache.htrace.core.TraceScope;
-import org.apache.htrace.core.Tracer;
+import org.apache.hadoop.tracing.TraceUtils;
+
+import com.google.protobuf.ByteString;
+import io.opentracing.SpanContext;
+import io.opentracing.Scope;
+import io.opentracing.util.GlobalTracer;
 
 /** Receiver */
 @InterfaceAudience.Private
 @InterfaceStability.Evolving
 public abstract class Receiver implements DataTransferProtocol {
-  private final Tracer tracer;
   protected DataInputStream in;
 
-  protected Receiver(Tracer tracer) {
-    this.tracer = tracer;
+  protected Receiver() {
   }
 
   /** Initialize a receiver for DataTransferProtocol with a socket. */
@@ -77,24 +77,24 @@ public abstract class Receiver implements DataTransferProtocol {
     return Op.read(in);
   }
 
-  private TraceScope continueTraceSpan(DataTransferTraceInfoProto proto,
+  private Scope continueTraceSpan(ByteString spanContextBytes,
                                        String description) {
-    TraceScope scope = null;
-    SpanId spanId = fromProto(proto);
-    if (spanId != null) {
-      scope = tracer.newScope(description, spanId);
+    Scope traceScope = null;
+    SpanContext spanContext = TraceUtils.byteStringToSpanContext(spanContextBytes);
+    if (spanContext != null) {
+      traceScope = GlobalTracer.get().buildSpan(description).asChildOf(spanContext).startActive(true);
     }
-    return scope;
+    return traceScope;
   }
 
-  private TraceScope continueTraceSpan(ClientOperationHeaderProto header,
+  private Scope continueTraceSpan(ClientOperationHeaderProto header,
                                              String description) {
     return continueTraceSpan(header.getBaseHeader(), description);
   }
 
-  private TraceScope continueTraceSpan(BaseHeaderProto header,
+  private Scope continueTraceSpan(BaseHeaderProto header,
                                              String description) {
-    return continueTraceSpan(header.getTraceInfo(), description);
+    return continueTraceSpan(header.getSpanContext(), description);
   }
 
   /** Process op by the corresponding method. */
@@ -146,7 +146,7 @@ public abstract class Receiver implements DataTransferProtocol {
   /** Receive OP_READ_BLOCK */
   private void opReadBlock() throws IOException {
     OpReadBlockProto proto = OpReadBlockProto.parseFrom(vintPrefixed(in));
-    TraceScope traceScope = continueTraceSpan(proto.getHeader(),
+    Scope traceScope = continueTraceSpan(proto.getHeader(),
         proto.getClass().getSimpleName());
     try {
       readBlock(PBHelperClient.convert(proto.getHeader().getBaseHeader().getBlock()),
@@ -167,7 +167,7 @@ public abstract class Receiver implements DataTransferProtocol {
   private void opWriteBlock(DataInputStream in) throws IOException {
     final OpWriteBlockProto proto = OpWriteBlockProto.parseFrom(vintPrefixed(in));
     final DatanodeInfo[] targets = PBHelperClient.convert(proto.getTargetsList());
-    TraceScope traceScope = continueTraceSpan(proto.getHeader(),
+    Scope traceScope = continueTraceSpan(proto.getHeader(),
         proto.getClass().getSimpleName());
     try {
       writeBlock(PBHelperClient.convert(proto.getHeader().getBaseHeader().getBlock()),
@@ -200,7 +200,7 @@ public abstract class Receiver implements DataTransferProtocol {
     final OpTransferBlockProto proto =
       OpTransferBlockProto.parseFrom(vintPrefixed(in));
     final DatanodeInfo[] targets = PBHelperClient.convert(proto.getTargetsList());
-    TraceScope traceScope = continueTraceSpan(proto.getHeader(),
+    Scope traceScope = continueTraceSpan(proto.getHeader(),
         proto.getClass().getSimpleName());
     try {
       final ExtendedBlock block =
@@ -226,7 +226,7 @@ public abstract class Receiver implements DataTransferProtocol {
       OpRequestShortCircuitAccessProto.parseFrom(vintPrefixed(in));
     SlotId slotId = (proto.hasSlotId()) ? 
         PBHelperClient.convert(proto.getSlotId()) : null;
-    TraceScope traceScope = continueTraceSpan(proto.getHeader(),
+    Scope traceScope = continueTraceSpan(proto.getHeader(),
         proto.getClass().getSimpleName());
     try {
       requestShortCircuitFds(PBHelperClient.convert(proto.getHeader().getBlock()),
@@ -243,7 +243,7 @@ public abstract class Receiver implements DataTransferProtocol {
       throws IOException {
     final ReleaseShortCircuitAccessRequestProto proto =
       ReleaseShortCircuitAccessRequestProto.parseFrom(vintPrefixed(in));
-    TraceScope traceScope = continueTraceSpan(proto.getTraceInfo(),
+    Scope traceScope = continueTraceSpan(proto.getSpanContext(),
         proto.getClass().getSimpleName());
     try {
       releaseShortCircuitFds(PBHelperClient.convert(proto.getSlotId()));
@@ -256,7 +256,7 @@ public abstract class Receiver implements DataTransferProtocol {
   private void opRequestShortCircuitShm(DataInputStream in) throws IOException {
     final ShortCircuitShmRequestProto proto =
         ShortCircuitShmRequestProto.parseFrom(vintPrefixed(in));
-    TraceScope traceScope = continueTraceSpan(proto.getTraceInfo(),
+    Scope traceScope = continueTraceSpan(proto.getSpanContext(),
         proto.getClass().getSimpleName());
     try {
       requestShortCircuitShm(proto.getClientName());
@@ -268,7 +268,7 @@ public abstract class Receiver implements DataTransferProtocol {
   /** Receive OP_REPLACE_BLOCK */
   private void opReplaceBlock(DataInputStream in) throws IOException {
     OpReplaceBlockProto proto = OpReplaceBlockProto.parseFrom(vintPrefixed(in));
-    TraceScope traceScope = continueTraceSpan(proto.getHeader(),
+    Scope traceScope = continueTraceSpan(proto.getHeader(),
         proto.getClass().getSimpleName());
     try {
       replaceBlock(PBHelperClient.convert(proto.getHeader().getBlock()),
@@ -285,7 +285,7 @@ public abstract class Receiver implements DataTransferProtocol {
   /** Receive OP_COPY_BLOCK */
   private void opCopyBlock(DataInputStream in) throws IOException {
     OpCopyBlockProto proto = OpCopyBlockProto.parseFrom(vintPrefixed(in));
-    TraceScope traceScope = continueTraceSpan(proto.getHeader(),
+    Scope traceScope = continueTraceSpan(proto.getHeader(),
         proto.getClass().getSimpleName());
     try {
       copyBlock(PBHelperClient.convert(proto.getHeader().getBlock()),
@@ -298,7 +298,7 @@ public abstract class Receiver implements DataTransferProtocol {
   /** Receive OP_BLOCK_CHECKSUM */
   private void opBlockChecksum(DataInputStream in) throws IOException {
     OpBlockChecksumProto proto = OpBlockChecksumProto.parseFrom(vintPrefixed(in));
-    TraceScope traceScope = continueTraceSpan(proto.getHeader(),
+    Scope traceScope = continueTraceSpan(proto.getHeader(),
         proto.getClass().getSimpleName());
     try {
       blockChecksum(PBHelperClient.convert(proto.getHeader().getBlock()),
@@ -313,7 +313,7 @@ public abstract class Receiver implements DataTransferProtocol {
   private void opStripedBlockChecksum(DataInputStream dis) throws IOException {
     OpBlockGroupChecksumProto proto =
         OpBlockGroupChecksumProto.parseFrom(vintPrefixed(dis));
-    TraceScope traceScope = continueTraceSpan(proto.getHeader(),
+    Scope traceScope = continueTraceSpan(proto.getHeader(),
         proto.getClass().getSimpleName());
     StripedBlockInfo stripedBlockInfo = new StripedBlockInfo(
         PBHelperClient.convert(proto.getHeader().getBlock()),

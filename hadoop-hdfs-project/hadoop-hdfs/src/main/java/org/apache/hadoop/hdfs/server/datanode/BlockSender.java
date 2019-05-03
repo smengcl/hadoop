@@ -50,11 +50,12 @@ import org.apache.hadoop.io.ReadaheadPool.ReadaheadRequest;
 import org.apache.hadoop.net.SocketOutputStream;
 import org.apache.hadoop.util.AutoCloseableLock;
 import org.apache.hadoop.util.DataChecksum;
-import org.apache.htrace.core.TraceScope;
 
 import static org.apache.hadoop.io.nativeio.NativeIO.POSIX.POSIX_FADV_DONTNEED;
 import static org.apache.hadoop.io.nativeio.NativeIO.POSIX.POSIX_FADV_SEQUENTIAL;
 
+import io.opentracing.Scope;
+import io.opentracing.util.GlobalTracer;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import org.slf4j.Logger;
@@ -722,8 +723,8 @@ class BlockSender implements java.io.Closeable {
    */
   long sendBlock(DataOutputStream out, OutputStream baseStream, 
                  DataTransferThrottler throttler) throws IOException {
-    final TraceScope scope = datanode.getTracer().
-        newScope("sendBlock_" + block.getBlockId());
+    final Scope scope = GlobalTracer.get().
+        buildSpan("sendBlock_" + block.getBlockId()).startActive(true);
     try {
       return doSendBlock(out, baseStream, throttler);
     } finally {

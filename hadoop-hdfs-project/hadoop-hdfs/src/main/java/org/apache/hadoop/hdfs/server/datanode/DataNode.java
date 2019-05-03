@@ -215,7 +215,6 @@ import org.apache.hadoop.util.Time;
 import org.apache.hadoop.util.Timer;
 import org.apache.hadoop.util.VersionInfo;
 import org.apache.hadoop.util.concurrent.HadoopExecutors;
-import org.apache.htrace.core.Tracer;
 import org.eclipse.jetty.util.ajax.JSON;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -227,6 +226,7 @@ import com.google.common.cache.LoadingCache;
 import com.google.common.collect.Lists;
 import com.google.protobuf.BlockingService;
 
+import io.opentracing.Tracer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -407,9 +407,7 @@ public class DataNode extends ReconfigurableBase
   private final SocketFactory socketFactory;
 
   private static Tracer createTracer(Configuration conf) {
-    return new Tracer.Builder("DataNode").
-        conf(TraceUtils.wrapHadoopConf(DATANODE_HTRACE_PREFIX , conf)).
-        build();
+      return TraceUtils.createAndRegisterTracer();
   }
 
   private long[] oobTimeouts; /** timeout value of each OOB type */
@@ -2187,7 +2185,6 @@ public class DataNode extends ReconfigurableBase
       // Notify the main thread.
       notifyAll();
     }
-    tracer.close();
   }
 
   /**
@@ -2687,7 +2684,6 @@ public class DataNode extends ReconfigurableBase
     if (localDataXceiverServer != null) {
       localDataXceiverServer.start();
     }
-    ipcServer.setTracer(tracer);
     ipcServer.start();
     startPlugins(getConf());
   }

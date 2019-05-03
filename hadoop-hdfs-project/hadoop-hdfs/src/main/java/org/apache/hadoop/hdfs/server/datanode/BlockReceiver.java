@@ -57,13 +57,13 @@ import org.apache.hadoop.util.Daemon;
 import org.apache.hadoop.util.DataChecksum;
 import org.apache.hadoop.util.StringUtils;
 import org.apache.hadoop.util.Time;
-import org.apache.htrace.core.Span;
-import org.apache.htrace.core.Tracer;
 
 import static org.apache.hadoop.io.nativeio.NativeIO.POSIX.POSIX_FADV_DONTNEED;
 import static org.apache.hadoop.io.nativeio.NativeIO.POSIX.SYNC_FILE_RANGE_WRITE;
 
 import com.google.common.annotations.VisibleForTesting;
+import io.opentracing.Span;
+import io.opentracing.util.GlobalTracer;
 import org.slf4j.Logger;
 
 /** A class that receives a block and writes to its own disk, meanwhile
@@ -311,10 +311,9 @@ class BlockReceiver implements Closeable {
    */
   @Override
   public void close() throws IOException {
-    Span span = Tracer.getCurrentSpan();
+    Span span = GlobalTracer.get().activeSpan();
     if (span != null) {
-      span.addKVAnnotation("maxWriteToDiskMs",
-            Long.toString(maxWriteToDiskMs));
+      span.setTag("maxWriteToDiskMs", Long.toString(maxWriteToDiskMs));
     }
     packetReceiver.close();
 

@@ -64,7 +64,8 @@ import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.util.ShutdownHookManager;
 
 import com.google.common.base.Preconditions;
-import org.apache.htrace.core.Tracer;
+import io.opentracing.Tracer;
+import io.opentracing.util.GlobalTracer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -235,7 +236,7 @@ public class FileContext {
                       final Configuration aConf) {
     defaultFS = defFs;
     conf = aConf;
-    tracer = FsTracer.get(aConf);
+    tracer = GlobalTracer.get(); // Tracer has already been registered.
     try {
       ugi = UserGroupInformation.getCurrentUser();
     } catch (IOException e) {
