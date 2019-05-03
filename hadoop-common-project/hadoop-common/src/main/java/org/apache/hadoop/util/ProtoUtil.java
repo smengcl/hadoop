@@ -29,10 +29,12 @@ import org.apache.hadoop.ipc.protobuf.IpcConnectionContextProtos.UserInformation
 import org.apache.hadoop.ipc.protobuf.RpcHeaderProtos.*;
 import org.apache.hadoop.security.SaslRpcServer.AuthMethod;
 import org.apache.hadoop.security.UserGroupInformation;
-import org.apache.htrace.core.Span;
-import org.apache.htrace.core.Tracer;
+import org.apache.hadoop.tracing.TraceUtils;
 
 import com.google.protobuf.ByteString;
+import io.opentracing.Span;
+import io.opentracing.SpanContext;
+import io.opentracing.util.GlobalTracer;
 
 public abstract class ProtoUtil {
 
@@ -178,12 +180,9 @@ public abstract class ProtoUtil {
         .setRetryCount(retryCount).setClientId(ByteString.copyFrom(uuid));
 
     // Add tracing info if we are currently tracing.
-    Span span = Tracer.getCurrentSpan();
+    Span span = GlobalTracer.get().activeSpan();
     if (span != null) {
-      result.setTraceInfo(RPCTraceInfoProto.newBuilder()
-          .setTraceId(span.getSpanId().getHigh())
-          .setParentId(span.getSpanId().getLow())
-            .build());
+      result.setSpanContext(TraceUtils.spanContextToByteString(span.context()));
     }
 
     // Add caller context if it is not null

@@ -43,10 +43,11 @@ import org.apache.hadoop.util.DiskChecker;
 
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_JOURNALNODE_HTTP_BIND_HOST_KEY;
 import static org.apache.hadoop.util.ExitUtil.terminate;
+import io.opentracing.Tracer;
+import io.opentracing.util.GlobalTracer;
 import org.apache.hadoop.util.StringUtils;
 import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
-import org.apache.htrace.core.Tracer;
 import org.eclipse.jetty.util.ajax.JSON;
 
 import javax.management.ObjectName;
@@ -78,7 +79,7 @@ public class JournalNode implements Tool, Configurable, JournalNodeMXBean {
   private ObjectName journalNodeInfoBeanName;
   private String httpServerURI;
   private final ArrayList<File> localDir = Lists.newArrayList();
-  Tracer tracer;
+  Tracer tracer = TraceUtils.createAndRegisterTracer();
 
   static {
     HdfsConfiguration.init();
@@ -176,12 +177,6 @@ public class JournalNode implements Tool, Configurable, JournalNodeMXBean {
             DFSConfigKeys.DFS_JOURNALNODE_EDITS_DIR_DEFAULT);
       }
       localDir.add(new File(journalNodeDir.trim()));
-    }
-
-    if (this.tracer == null) {
-      this.tracer = new Tracer.Builder("JournalNode").
-          conf(TraceUtils.wrapHadoopConf("journalnode.htrace", conf)).
-          build();
     }
   }
 
@@ -293,10 +288,6 @@ public class JournalNode implements Tool, Configurable, JournalNodeMXBean {
     if (journalNodeInfoBeanName != null) {
       MBeans.unregister(journalNodeInfoBeanName);
       journalNodeInfoBeanName = null;
-    }
-    if (tracer != null) {
-      tracer.close();
-      tracer = null;
     }
   }
 

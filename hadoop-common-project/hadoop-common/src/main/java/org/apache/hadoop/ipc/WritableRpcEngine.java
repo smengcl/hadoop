@@ -39,10 +39,11 @@ import org.apache.hadoop.util.Time;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.conf.*;
-import org.apache.htrace.core.TraceScope;
-import org.apache.htrace.core.Tracer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import io.opentracing.Scope;
+import io.opentracing.util.GlobalTracer;
 
 /** An RpcEngine implementation for Writable data. */
 @InterfaceStability.Evolving
@@ -240,18 +241,15 @@ public class WritableRpcEngine implements RpcEngine {
       // if Tracing is on then start a new span for this rpc.
       // guard it in the if statement to make sure there isn't
       // any extra string manipulation.
-      Tracer tracer = Tracer.curThreadTracer();
-      TraceScope traceScope = null;
-      if (tracer != null) {
-        traceScope = tracer.newScope(RpcClientUtil.methodToTraceString(method));
-      }
+      Scope scope = GlobalTracer.get().buildSpan(RpcClientUtil.methodToTraceString(method))
+          .startActive(true);
       ObjectWritable value;
       try {
         value = (ObjectWritable)
           client.call(RPC.RpcKind.RPC_WRITABLE, new Invocation(method, args),
             remoteId, fallbackToSimpleAuth, alignmentContext);
       } finally {
-        if (traceScope != null) traceScope.close();
+        scope.close();
       }
       if (LOG.isDebugEnabled()) {
         long callTime = Time.monotonicNow() - startTime;

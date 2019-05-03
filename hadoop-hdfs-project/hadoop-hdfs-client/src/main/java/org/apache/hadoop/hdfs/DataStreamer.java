@@ -75,16 +75,17 @@ import org.apache.hadoop.util.Daemon;
 import org.apache.hadoop.util.DataChecksum;
 import org.apache.hadoop.util.Progressable;
 import org.apache.hadoop.util.Time;
-import org.apache.htrace.core.Span;
-import org.apache.htrace.core.SpanId;
-import org.apache.htrace.core.TraceScope;
-import org.apache.htrace.core.Tracer;
 
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.cache.RemovalListener;
 import com.google.common.cache.RemovalNotification;
+
+import io.opentracing.Scope;
+import io.opentracing.Span;
+import io.opentracing.SpanContext;
+import io.opentracing.util.GlobalTracer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -654,7 +655,7 @@ class DataStreamer extends Daemon {
   @Override
   public void run() {
     long lastPacket = Time.monotonicNow();
-    TraceScope scope = null;
+    Scope scope = null;
     while (!streamerClosed && dfsClient.clientRunning) {
       // if the Responder encountered an error, shutdown Responder
       if (errorState.hasError()) {
@@ -698,11 +699,16 @@ class DataStreamer extends Daemon {
               LOG.debug("Thread interrupted", e);
             }
             one = dataQueue.getFirst(); // regular data packet
-            SpanId[] parents = one.getTraceParents();
+
+            // The original code stored multiple parents
+            // in the DFSPacket, and use them *all* here
+            // when creating a new Span.
+            // We take the last one *for now*.
+            // Moreover: we don't activate the Span for now.
+            SpanContext[] parents = one.getTraceParents();
             if (parents.length > 0) {
-              scope = dfsClient.getTracer().
-                  newScope("dataStreamer", parents[0]);
-              scope.getSpan().setParents(parents);
+              scope = GlobalTracer.get().buildSpan("dataStreamer")
+                .asChildOf(parents[parents.length - 1]).startActive(false);
             }
           }
         }
@@ -748,14 +754,14 @@ class DataStreamer extends Daemon {
         }
 
         // send the packet
-        SpanId spanId = SpanId.INVALID;
+        SpanContext spanContext = null;
         synchronized (dataQueue) {
           // move packet from dataQueue to ackQueue
           if (!one.isHeartbeatPacket()) {
             if (scope != null) {
-              spanId = scope.getSpanId();
-              scope.detach();
-              one.setTraceScope(scope);
+              one.setSpan(scope.span());
+              spanContext = scope.span().context();
+              scope.close();
             }
             scope = null;
             dataQueue.removeFirst();
@@ -768,8 +774,8 @@ class DataStreamer extends Daemon {
         LOG.debug("{} sending {}", this, one);
 
         // write out data to remote datanode
-        try (TraceScope ignored = dfsClient.getTracer().
-            newScope("DataStreamer#writeTo", spanId)) {
+        try (Scope ignored = GlobalTracer.get().
+            buildSpan("DataStreamer#writeTo").asChildOf(spanContext).startActive(true)) {
           one.writeTo(blockStream);
           blockStream.flush();
         } catch (IOException e) {
@@ -870,8 +876,8 @@ class DataStreamer extends Daemon {
    * @throws IOException
    */
   void waitForAckedSeqno(long seqno) throws IOException {
-    try (TraceScope ignored = dfsClient.getTracer().
-        newScope("waitForAckedSeqno")) {
+    try (Scope ignored = GlobalTracer.get().
+        buildSpan("waitForAckedSeqno").startActive(true)) {
       LOG.debug("{} waiting for ack for: {}", this, seqno);
       long begin = Time.monotonicNow();
       try {
@@ -918,9 +924,9 @@ class DataStreamer extends Daemon {
           while (!streamerClosed && dataQueue.size() + ackQueue.size() >
               dfsClient.getConf().getWriteMaxPackets()) {
             if (firstWait) {
-              Span span = Tracer.getCurrentSpan();
+              Span span = GlobalTracer.get().activeSpan();
               if (span != null) {
-                span.addTimelineAnnotation("dataQueue.wait");
+                span.log("dataQueue.wait");
               }
               firstWait = false;
             }
@@ -939,9 +945,9 @@ class DataStreamer extends Daemon {
             }
           }
         } finally {
-          Span span = Tracer.getCurrentSpan();
+          Span span = GlobalTracer.get().activeSpan();
           if ((span != null) && (!firstWait)) {
-            span.addTimelineAnnotation("end.wait");
+            span.log("end.wait");
           }
         }
         checkClosed();
@@ -1080,7 +1086,7 @@ class DataStreamer extends Daemon {
       setName("ResponseProcessor for block " + block);
       PipelineAck ack = new PipelineAck();
 
-      TraceScope scope = null;
+      Scope scope = null;
       while (!responderClosed && dfsClient.clientRunning && !isLastPacketInBlock) {
         // process responses from datanodes.
         try {
@@ -1171,10 +1177,9 @@ class DataStreamer extends Daemon {
           block.setNumBytes(one.getLastByteOffsetBlock());
 
           synchronized (dataQueue) {
-            scope = one.getTraceScope();
-            if (scope != null) {
-              scope.reattach();
-              one.setTraceScope(null);
+            if (one.getSpan() != null) {
+              scope = GlobalTracer.get().scopeManager().activate(one.getSpan(), true);
+              one.setSpan(null);
             }
             lastAckedSeqno = seqno;
             pipelineRecoveryCount = 0;
@@ -1269,11 +1274,10 @@ class DataStreamer extends Daemon {
         synchronized (dataQueue) {
           DFSPacket endOfBlockPacket = dataQueue.remove();  // remove the end of block packet
           // Close any trace span associated with this Packet
-          TraceScope scope = endOfBlockPacket.getTraceScope();
-          if (scope != null) {
-            scope.reattach();
-            scope.close();
-            endOfBlockPacket.setTraceScope(null);
+          Span span = endOfBlockPacket.getSpan();
+          if (span != null) {
+            span.finish();
+            endOfBlockPacket.setSpan(null);
           }
           assert endOfBlockPacket.isLastPacketInBlock();
           assert lastAckedSeqno == endOfBlockPacket.getSeqno() - 1;
@@ -1949,7 +1953,7 @@ class DataStreamer extends Daemon {
   void queuePacket(DFSPacket packet) {
     synchronized (dataQueue) {
       if (packet == null) return;
-      packet.addTraceParent(Tracer.getCurrentSpanId());
+      packet.addTraceParent(GlobalTracer.get().activeSpan());
       dataQueue.addLast(packet);
       lastQueuedSeqno = packet.getSeqno();
       LOG.debug("Queued {}, {}", packet, this);

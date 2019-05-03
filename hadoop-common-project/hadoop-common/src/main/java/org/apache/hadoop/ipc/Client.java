@@ -53,10 +53,11 @@ import org.apache.hadoop.util.ProtoUtil;
 import org.apache.hadoop.util.StringUtils;
 import org.apache.hadoop.util.Time;
 import org.apache.hadoop.util.concurrent.AsyncGet;
-import org.apache.htrace.core.Span;
-import org.apache.htrace.core.Tracer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import io.opentracing.Span;
+import io.opentracing.util.GlobalTracer;
 
 import javax.net.SocketFactory;
 import javax.security.sasl.Sasl;
@@ -789,10 +790,11 @@ public class Client implements AutoCloseable {
         if (LOG.isDebugEnabled()) {
           LOG.debug("Connecting to "+server);
         }
-        Span span = Tracer.getCurrentSpan();
+        Span span = GlobalTracer.get().activeSpan();
         if (span != null) {
-          span.addTimelineAnnotation("IPC client connecting to " + server);
+          span.log("IPC client connecting to " + server);
         }
+
         short numRetries = 0;
         Random rand = null;
         while (true) {
@@ -854,9 +856,9 @@ public class Client implements AutoCloseable {
           // update last activity time
           touch();
 
-          span = Tracer.getCurrentSpan();
+          span = GlobalTracer.get().activeSpan();
           if (span != null) {
-            span.addTimelineAnnotation("IPC client connected to " + server);
+            span.log("IPC client connected to " + server);
           }
 
           // start the receiver thread after the socket connection has been set

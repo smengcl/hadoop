@@ -35,10 +35,12 @@ import org.apache.hadoop.tracing.TraceUtils;
 import org.apache.hadoop.util.StringUtils;
 import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
-import org.apache.htrace.core.TraceScope;
-import org.apache.htrace.core.Tracer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import io.opentracing.Tracer;
+import io.opentracing.Scope;
+import io.opentracing.util.GlobalTracer;
 
 /** Provide command line access to a FileSystem. */
 @InterfaceAudience.Private
@@ -301,9 +303,8 @@ public class FsShell extends Configured implements Tool {
   public int run(String argv[]) throws Exception {
     // initialize FsShell
     init();
-    Tracer tracer = new Tracer.Builder("FsShell").
-        conf(TraceUtils.wrapHadoopConf(SHELL_HTRACE_PREFIX, getConf())).
-        build();
+    // Tracer has already been created and registered.
+    Tracer tracer = GlobalTracer.get();
     int exitCode = -1;
     if (argv.length < 1) {
       printUsage(System.err);
@@ -315,14 +316,13 @@ public class FsShell extends Configured implements Tool {
         if (instance == null) {
           throw new UnknownCommandException();
         }
-        TraceScope scope = tracer.newScope(instance.getCommandName());
-        if (scope.getSpan() != null) {
-          String args = StringUtils.join(" ", argv);
-          if (args.length() > 2048) {
-            args = args.substring(0, 2048);
-          }
-          scope.getSpan().addKVAnnotation("args", args);
+        Scope scope = tracer.buildSpan(instance.getCommandName()).startActive(true);
+        String args = StringUtils.join(" ", argv);
+        if (args.length() > 2048) {
+          args = args.substring(0, 2048);
         }
+        scope.span().setTag("args", args);
+
         try {
           exitCode = instance.run(Arrays.copyOfRange(argv, 1, argv.length));
         } finally {
@@ -346,7 +346,6 @@ public class FsShell extends Configured implements Tool {
         e.printStackTrace(System.err);
       }
     }
-    tracer.close();
     return exitCode;
   }
   

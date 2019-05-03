@@ -35,8 +35,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
-import org.apache.htrace.core.TraceScope;
-import org.apache.htrace.core.Tracer;
+import io.opentracing.Scope;
+import io.opentracing.util.GlobalTracer;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Ticker;
 import com.google.common.cache.CacheBuilder;
@@ -310,19 +310,14 @@ public class Groups {
     @Override
     public List<String> load(String user) throws Exception {
       LOG.debug("GroupCacheLoader - load.");
-      TraceScope scope = null;
-      Tracer tracer = Tracer.curThreadTracer();
-      if (tracer != null) {
-        scope = tracer.newScope("Groups#fetchGroupList");
-        scope.addKVAnnotation("user", user);
-      }
+      Scope scope = GlobalTracer.get().buildSpan("Groups#fetchGroupList").startActive(true);
+      scope.span().setTag("user", user);
+
       List<String> groups = null;
       try {
         groups = fetchGroupList(user);
       } finally {
-        if (scope != null) {
-          scope.close();
-        }
+        scope.close();
       }
 
       if (groups.isEmpty()) {
