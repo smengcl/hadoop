@@ -53,7 +53,6 @@ import org.apache.hadoop.util.DataChecksum;
 import org.apache.hadoop.tracing.TraceUtils;
 
 import io.opentracing.Span;
-import io.opentracing.SpanContext;
 import io.opentracing.util.GlobalTracer;
 
 import com.google.protobuf.Message;

@@ -54,14 +54,8 @@ message HandshakeSecretProto {
 message BaseHeaderProto {
   required ExtendedBlockProto block = 1;
   optional hadoop.common.TokenProto token = 2;
-//  optional DataTransferTraceInfoProto traceInfo = 3;
   optional bytes spanContext = 3;
 }
-
-//message DataTransferTraceInfoProto {
-//  required uint64 traceId = 1;
-//  required uint64 parentId = 2;
-//}
 
 message ClientOperationHeaderProto {
   required BaseHeaderProto baseHeader = 1;
@@ -211,7 +205,6 @@ message OpRequestShortCircuitAccessProto {
 
 message ReleaseShortCircuitAccessRequestProto {
   required ShortCircuitShmSlotProto slotId = 1;
-//  optional DataTransferTraceInfoProto traceInfo = 2;
   optional bytes spanContext = 2;
 }
 
@@ -224,7 +217,6 @@ message ShortCircuitShmRequestProto {
   // The name of the client requesting the shared memory segment.  This is
   // purely for logging / debugging purposes.
   required string clientName = 1;
-//  optional DataTransferTraceInfoProto traceInfo = 2;
   optional bytes spanContext = 2;
 }
 

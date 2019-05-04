@@ -27,7 +27,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import io.jaegertracing.internal.JaegerTracer;
 import io.jaegertracing.internal.samplers.ConstSampler;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.conf.Configuration;
@@ -94,11 +93,10 @@ public class TraceUtils {
   }
 
   public static Tracer createAndRegisterTracer() {
-    // Jaeger
     if (!GlobalTracer.isRegistered()) {
       io.jaegertracing.Configuration config = io.jaegertracing.Configuration
           .fromEnv("Hadoop POC");
-      JaegerTracer tracer = config.getTracerBuilder()
+      Tracer tracer = config.getTracerBuilder()
           .withSampler(new ConstSampler(true))
           .build();
       GlobalTracer.register(tracer);
