@@ -1176,6 +1176,11 @@
         <artifactId>zipkin-sender-urlconnection</artifactId>
         <version>2.7.8</version>
       </dependency>
+      <dependency>
+        <groupId>io.jaegertracing</groupId>
+        <artifactId>jaeger-client</artifactId>
+        <version>0.33.1</version>
+      </dependency>
 
       <dependency>
         <groupId>org.apache.htrace</groupId>

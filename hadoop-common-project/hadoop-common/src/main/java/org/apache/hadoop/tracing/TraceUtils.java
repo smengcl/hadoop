@@ -27,6 +27,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import io.jaegertracing.internal.JaegerTracer;
+import io.jaegertracing.internal.samplers.ConstSampler;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.tracing.SpanReceiverInfo.ConfigurationPair;
@@ -42,12 +44,15 @@ import io.opentracing.util.GlobalTracer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/*
+// Zipkin
 import brave.Tracing;
 import brave.opentracing.BraveTracer;
 import zipkin2.reporter.AsyncReporter;
 import zipkin2.reporter.Reporter;
 import zipkin2.reporter.Sender;
 import zipkin2.reporter.urlconnection.URLConnectionSender;
+*/
 
 /**
  * This class provides utility functions for tracing.
@@ -102,6 +107,8 @@ public class TraceUtils {
   private static final String LOCAL_SERVICE_NAME = "ProofOfConcept";
 
   public static Tracer createAndRegisterTracer() {
+    /*
+    // Zipkin
     Sender sender = URLConnectionSender.create(ZIPKIN_HOST + "/api/v2/spans");
     Reporter reporter = AsyncReporter.create(sender);
 
@@ -117,6 +124,17 @@ public class TraceUtils {
       LOG.debug("Successfully resolved a Tracer instance and registered it as the global Tracer");
     } catch (IllegalStateException e) {
       LOG.warn("Could not register resolved Tracer through GlobalTracer: {}", e);
+    }
+     */
+
+    // Jaeger
+    if (!GlobalTracer.isRegistered()) {
+      io.jaegertracing.Configuration config = io.jaegertracing.Configuration
+          .fromEnv("Hadoop POC");
+      JaegerTracer tracer = config.getTracerBuilder()
+          .withSampler(new ConstSampler(true))
+          .build();
+      GlobalTracer.register(tracer);
     }
 
     return GlobalTracer.get();
