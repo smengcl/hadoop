@@ -36,10 +36,13 @@ import org.apache.hadoop.tracing.TraceUtils;
 @InterfaceAudience.Private
 @InterfaceStability.Unstable
 public final class FsTracer {
-  private static Tracer instance;
-
   public static Tracer get(Configuration conf) {
-    return TraceUtils.createAndRegisterTracer();
+    if (!GlobalTracer.isRegistered()) {
+      return TraceUtils.createAndRegisterTracer();
+    }
+    else {
+      return GlobalTracer.get();
+    }
   }
 
   @VisibleForTesting

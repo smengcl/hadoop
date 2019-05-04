@@ -3325,7 +3325,7 @@ public abstract class FileSystem extends Configured
    */
   private static FileSystem createFileSystem(URI uri, Configuration conf)
       throws IOException {
-    Tracer tracer = GlobalTracer.get(); // Tracer has been already registered.
+    Tracer tracer = FsTracer.get(conf);
     try (Scope scope = tracer.buildSpan("FileSystem#createFileSystem").startActive(true)) {
       scope.span().setTag("scheme", uri.getScheme());
       Class<?> clazz = getFileSystemClass(uri.getScheme(), conf);

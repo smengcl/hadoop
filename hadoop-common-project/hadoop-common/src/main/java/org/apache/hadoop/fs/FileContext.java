@@ -236,7 +236,7 @@ public class FileContext {
                       final Configuration aConf) {
     defaultFS = defFs;
     conf = aConf;
-    tracer = GlobalTracer.get(); // Tracer has already been registered.
+    tracer = FsTracer.get(aConf);
     try {
       ugi = UserGroupInformation.getCurrentUser();
     } catch (IOException e) {
