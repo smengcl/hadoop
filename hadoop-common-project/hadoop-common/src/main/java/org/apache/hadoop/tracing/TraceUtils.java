@@ -120,7 +120,7 @@ public class TraceUtils {
       ObjectInputStream objStream = new ObjectInputStream(stream);
       Map<String, String> carrier = (Map<String, String>) objStream.readObject();
 
-      context = GlobalTracer.get().extract(Format.Builtin.TEXT_MAP_EXTRACT,
+      context = GlobalTracer.get().extract(Format.Builtin.TEXT_MAP,
           new TextMapExtractAdapter(carrier));
     } catch (Exception e) {
       LOG.warn("Could not deserialize context {}", e);
@@ -136,7 +136,7 @@ public class TraceUtils {
     }
 
     Map<String, String> carrier = new HashMap<String, String>();
-    GlobalTracer.get().inject(context, Format.Builtin.TEXT_MAP_INJECT,
+    GlobalTracer.get().inject(context, Format.Builtin.TEXT_MAP,
         new TextMapInjectAdapter(carrier));
     if (carrier.isEmpty()) {
       LOG.warn("SpanContext was not properly injected by the Tracer.");

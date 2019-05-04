@@ -267,12 +267,12 @@
     <dependency>
       <groupId>io.opentracing</groupId>
       <artifactId>opentracing-util</artifactId>
-      <version>0.32.0</version>
+      <version>0.31.0</version>
     </dependency>
     <dependency>
       <groupId>io.jaegertracing</groupId>
       <artifactId>jaeger-client</artifactId>
-      <version>0.35.0</version>
+      <version>0.33.1</version>
     </dependency>
 
     <dependency>
