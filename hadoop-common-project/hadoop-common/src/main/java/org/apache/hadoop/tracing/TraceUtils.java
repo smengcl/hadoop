@@ -44,16 +44,6 @@ import io.opentracing.util.GlobalTracer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/*
-// Zipkin
-import brave.Tracing;
-import brave.opentracing.BraveTracer;
-import zipkin2.reporter.AsyncReporter;
-import zipkin2.reporter.Reporter;
-import zipkin2.reporter.Sender;
-import zipkin2.reporter.urlconnection.URLConnectionSender;
-*/
-
 /**
  * This class provides utility functions for tracing.
  */
@@ -103,30 +93,7 @@ public class TraceUtils {
     };
   }
 
-  private static final String ZIPKIN_HOST = "http://localhost:9411";
-  private static final String LOCAL_SERVICE_NAME = "ProofOfConcept";
-
   public static Tracer createAndRegisterTracer() {
-    /*
-    // Zipkin
-    Sender sender = URLConnectionSender.create(ZIPKIN_HOST + "/api/v2/spans");
-    Reporter reporter = AsyncReporter.create(sender);
-
-    Tracing braveTracing = Tracing.newBuilder()
-        .localServiceName(LOCAL_SERVICE_NAME)
-        .spanReporter(reporter)
-        .build();
-
-    Tracer tracer = BraveTracer.create(braveTracing);
-
-    try {
-      GlobalTracer.register(tracer);
-      LOG.debug("Successfully resolved a Tracer instance and registered it as the global Tracer");
-    } catch (IllegalStateException e) {
-      LOG.warn("Could not register resolved Tracer through GlobalTracer: {}", e);
-    }
-     */
-
     // Jaeger
     if (!GlobalTracer.isRegistered()) {
       io.jaegertracing.Configuration config = io.jaegertracing.Configuration
@@ -153,7 +120,8 @@ public class TraceUtils {
       ObjectInputStream objStream = new ObjectInputStream(stream);
       Map<String, String> carrier = (Map<String, String>) objStream.readObject();
 
-      context = GlobalTracer.get().extract(Format.Builtin.TEXT_MAP, new TextMapExtractAdapter(carrier));
+      context = GlobalTracer.get().extract(Format.Builtin.TEXT_MAP_EXTRACT,
+          new TextMapExtractAdapter(carrier));
     } catch (Exception e) {
       LOG.warn("Could not deserialize context {}", e);
     }
@@ -168,7 +136,8 @@ public class TraceUtils {
     }
 
     Map<String, String> carrier = new HashMap<String, String>();
-    GlobalTracer.get().inject(context, Format.Builtin.TEXT_MAP, new TextMapInjectAdapter(carrier));
+    GlobalTracer.get().inject(context, Format.Builtin.TEXT_MAP_INJECT,
+        new TextMapInjectAdapter(carrier));
     if (carrier.isEmpty()) {
       LOG.warn("SpanContext was not properly injected by the Tracer.");
       return null;
