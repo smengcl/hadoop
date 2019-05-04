@@ -21,7 +21,7 @@ package org.apache.hadoop.fs;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.util.DataChecksum;
-import org.apache.htrace.core.TraceScope;
+import org.apache.hadoop.tracing.TraceScope;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -200,6 +200,13 @@ abstract public class FSOutputSummer extends OutputStream {
   }
 
   protected TraceScope createWriteTraceScope() {
+    // TODO
+//    Span span = do_something();
+//    Scope scope = null;
+//    if (span != null) {
+//      scope = GlobalTracer.get().scopeManager().activate(span, true);
+//    }
+//    return new TraceScope(span, scope);
     return null;
   }
 
