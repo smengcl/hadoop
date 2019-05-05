@@ -70,6 +70,7 @@ import javax.security.sasl.Sasl;
 import javax.security.sasl.SaslException;
 import javax.security.sasl.SaslServer;
 
+import io.opentracing.SpanContext;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceAudience.Private;
 import org.apache.hadoop.classification.InterfaceAudience.Public;
@@ -114,10 +115,10 @@ import org.apache.hadoop.util.ExitUtil;
 import org.apache.hadoop.util.ProtoUtil;
 import org.apache.hadoop.util.StringUtils;
 import org.apache.hadoop.util.Time;
-import org.apache.htrace.core.SpanId;
-import org.apache.htrace.core.TraceScope;
-import org.apache.htrace.core.Tracer;
-
+import org.apache.hadoop.tracing.SpanId;
+import org.apache.hadoop.tracing.TraceScope;
+import org.apache.hadoop.tracing.Tracer;
+import org.apache.hadoop.tracing.TraceUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.protobuf.ByteString;
@@ -723,6 +724,7 @@ public abstract class Server {
     final RPC.RpcKind rpcKind;
     final byte[] clientId;
     private final TraceScope traceScope; // the HTrace scope on the server side
+//    private final Span span; // the OT span on the server side
     private final CallerContext callerContext; // the call context
     private boolean deferredResponse = false;
     private int priorityLevel;
@@ -2545,17 +2547,17 @@ public abstract class Server {
       }
         
       TraceScope traceScope = null;
-      if (header.hasTraceInfo()) {
+      if (header.hasSpanContext()) {
         if (tracer != null) {
           // If the incoming RPC included tracing info, always continue the
           // trace
-          SpanId parentSpanId = new SpanId(
-              header.getTraceInfo().getTraceId(),
-              header.getTraceInfo().getParentId());
-          traceScope = tracer.newScope(
-              RpcClientUtil.toTraceName(rpcRequest.toString()),
-              parentSpanId);
-          traceScope.detach();
+          SpanContext spanCtx = TraceUtils.byteStringToSpanContext(header.getSpanContext());
+          if (spanCtx != null) {
+            traceScope = tracer.newScope(
+                RpcClientUtil.toTraceName(rpcRequest.toString()),
+                spanCtx);
+            traceScope.detach();
+          }
         }
       }
 
