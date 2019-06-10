@@ -5,9 +5,9 @@ import io.opentracing.SpanContext;
 import io.opentracing.util.GlobalTracer;
 
 public class Tracer {
-  private static Tracer tracerCurThread = null;
-  private static io.opentracing.Tracer otTracerCurThread;
-  io.opentracing.Tracer tracer;
+  // Avoid creating new objects every time it is called
+  private static Tracer globalTracer;
+  public io.opentracing.Tracer tracer;
 
   public Tracer(io.opentracing.Tracer tracer) {
     this.tracer = tracer;
@@ -18,47 +18,21 @@ public class Tracer {
   }
 
   public static Tracer curThreadTracer() {
-    // TODO: set curThreadTracer WHERE?
-    if (otTracerCurThread == null) {
-      otTracerCurThread = GlobalTracer.get();
+    if (globalTracer == null) {
+      globalTracer = new Tracer(GlobalTracer.get());
     }
-    if (otTracerCurThread != null) {
-      tracerCurThread = new Tracer(otTracerCurThread);
-    } else {
-      tracerCurThread = null;
-    }
-    return tracerCurThread;
+    return globalTracer;
   }
 
   /***
-   * TODO: Should return current thread's span.
+   * Return active span
    * @return org.apache.hadoop.tracing.Span
    */
   public static Span getCurrentSpan() {
-    if (otTracerCurThread == null) {
-      otTracerCurThread = GlobalTracer.get();
-    }
-    if (otTracerCurThread != null) {
-      io.opentracing.Span span = otTracerCurThread.activeSpan();
-      return new Span(span);
-    } else {
-      System.out.println("!!! getCurrentSpan returns null!!");
-      return null;
-    }
-  }
-
-  /***
-   * Corresponding to OpenTracing SpanContext
-   * @return SpanId
-   */
-  public static SpanId getCurrentSpanId() {
-    // TODO: IMPLEMENT?
-//    return GlobalTracer.get().activeSpan();
-    return null;
+    return new Span(GlobalTracer.get().activeSpan());
   }
 
   public TraceScope newScope(String description) {
-    // Note: Before refactor it uses try-with-resource
     Scope scope = tracer.buildSpan(description).startActive(true);
     return new TraceScope(scope);
   }
@@ -71,9 +45,9 @@ public class Tracer {
 
   public TraceScope newScope(String description, SpanContext spanCtx,
       boolean finishSpanOnClose) {
-    io.opentracing.Scope scope = tracer.buildSpan(description)
+    io.opentracing.Scope otscope = tracer.buildSpan(description)
         .asChildOf(spanCtx).startActive(finishSpanOnClose);
-    return new TraceScope(scope);
+    return new TraceScope(otscope);
   }
 
   public void close() {
