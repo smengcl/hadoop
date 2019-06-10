@@ -1,65 +1,39 @@
 package org.apache.hadoop.tracing;
 
-//import io.opentracing.Span;
-//import io.opentracing.Scope;
-//import io.opentracing.util.GlobalTracer;
-
 import java.io.Closeable;
 
 public class TraceScope implements Closeable {
-  private Span span = null;
-//  private TraceScope scope = null;
-
-  private io.opentracing.Span otspan = null;
-  private io.opentracing.Scope otscope = null;
+  private io.opentracing.Scope otscope;
 
   public TraceScope(io.opentracing.Scope scope) {
-    this.otscope = scope;
-    // TODO: VERIFY. Not sure this would work. Key
-    this.otspan = this.otscope.span();
-    this.span = new Span(this.otspan);
-  }
-
-  public TraceScope(io.opentracing.Span span) {
-    this.otspan = span;
-    this.span = new Span(this.otspan);
-    // TODO: VERIFY
-    // TODO: TRY REMOVING THIS CONTRUCTOR
-//    this.otscope = this.otspan.context();
-  }
-
-  public TraceScope(io.opentracing.Span span, io.opentracing.Scope scope) {
-    this.otspan = span;
     this.otscope = scope;
   }
 
   public Span addKVAnnotation(String key, String value) {
-    return this.span.addKVAnnotation(key, value);
-    // TODO: VERIFY
-//    this.otspan = otscope.span().setTag(key, value);
-//    span = span.setSpanOT(otspan);
-//    return span;
+    // Add tag to current active span
+    // TODO: overhead
+    return new Span(this.otscope.span().setTag(key, value));
+//    return this.span.addKVAnnotation(key, value);
   }
 
   public Span addTimelineAnnotation(String msg) {
-    return this.span.addTimelineAnnotation(msg);
+    // TODO: overhead
+    return new Span(this.otscope.span().log(msg));
   }
 
-//  public TraceScope startActive(boolean b) {
-//    return null;
-//  }
-
   public Span span() {
-    return this.span;
+    // TODO: overhead
+    return new Span(this.otscope.span());
   }
 
   public Span getSpan() {
-    // TODO: Need to assign ot span from scope
+    // TODO: Need to assign ot span from scope?
     /* e.g.
       TraceScope scope = tracer.newScope(instance.getCommandName());
       if (scope.getSpan() != null) {
     */
-    return this.span;
+    // TODO: overhead
+    return new Span(this.otscope.span());
   }
 
   public void reattach() {
@@ -71,6 +45,10 @@ public class TraceScope implements Closeable {
   public void detach() {
   }
 
+  // TODO: need override or not?
+//  @Override
   public void close() {
+    System.err.println("DEBUG: scope closed");
+    otscope.close();
   }
 }

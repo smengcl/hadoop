@@ -23,6 +23,10 @@ import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.util.DataChecksum;
 import org.apache.hadoop.tracing.TraceScope;
 
+import io.opentracing.Span;
+import io.opentracing.Scope;
+import io.opentracing.util.GlobalTracer;
+
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.zip.Checksum;
@@ -199,13 +203,17 @@ abstract public class FSOutputSummer extends OutputStream {
     return sum;
   }
 
+  protected Span createWriteSpan() {
+    return null;
+  }
+
   protected TraceScope createWriteTraceScope() {
-    // TODO
-//    Span span = do_something();
-//    Scope scope = null;
-//    if (span != null) {
-//      scope = GlobalTracer.get().scopeManager().activate(span, true);
-//    }
+    Span span = createWriteSpan();
+    Scope scope = null;
+    if (span != null) {
+      scope = GlobalTracer.get().scopeManager().activate(span, true);
+    }
+    // TODO: not sure in which case this should be initialized
 //    return new TraceScope(span, scope);
     return null;
   }

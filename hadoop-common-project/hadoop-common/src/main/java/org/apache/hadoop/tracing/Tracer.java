@@ -1,7 +1,6 @@
 package org.apache.hadoop.tracing;
 
 import io.opentracing.Scope;
-//import io.opentracing.Span;
 import io.opentracing.SpanContext;
 import io.opentracing.util.GlobalTracer;
 
@@ -9,10 +8,6 @@ public class Tracer {
   private static Tracer tracerCurThread = null;
   private static io.opentracing.Tracer otTracerCurThread;
   io.opentracing.Tracer tracer;
-  TraceScope scope = null;
-
-//  public Tracer() {
-//  }
 
   public Tracer(io.opentracing.Tracer tracer) {
     this.tracer = tracer;
@@ -47,6 +42,7 @@ public class Tracer {
       io.opentracing.Span span = otTracerCurThread.activeSpan();
       return new Span(span);
     } else {
+      System.out.println("!!! getCurrentSpan returns null!!");
       return null;
     }
   }
@@ -56,21 +52,21 @@ public class Tracer {
    * @return SpanId
    */
   public static SpanId getCurrentSpanId() {
-    // TODO: IMPLEMENT
+    // TODO: IMPLEMENT?
 //    return GlobalTracer.get().activeSpan();
     return null;
   }
 
   public TraceScope newScope(String description) {
+    // Note: Before refactor it uses try-with-resource
     Scope scope = tracer.buildSpan(description).startActive(true);
     return new TraceScope(scope);
   }
 
   public TraceScope newScope(String description, SpanContext spanCtx) {
-    io.opentracing.Span span = tracer.buildSpan(description)
-        .asChildOf(spanCtx).start();
-    // TODO: This usage looks incorrect
-    return new TraceScope(span);
+    io.opentracing.Scope otscope = tracer.buildSpan(description)
+        .asChildOf(spanCtx).startActive(true);
+    return new TraceScope(otscope);
   }
 
   public TraceScope newScope(String description, SpanContext spanCtx,
@@ -84,8 +80,11 @@ public class Tracer {
   }
 
   public static class Builder {
+    // Dummy properties for HTrace code compatibility
     private String name;
     private TraceConfiguration conf;
+
+    static Tracer globalTracer;
 
     public Builder(final String name) {
       this.name = name;
@@ -97,9 +96,11 @@ public class Tracer {
     }
 
     public Tracer build() {
-      io.opentracing.Tracer oTracer = TraceUtils.createAndRegisterTracer();
-      Tracer tracer = new Tracer(oTracer);
-      return tracer;
+      if (globalTracer == null) {
+        io.opentracing.Tracer oTracer = TraceUtils.createAndRegisterTracer();
+        globalTracer = new Tracer(oTracer);
+      }
+      return globalTracer;
     }
   }
 }

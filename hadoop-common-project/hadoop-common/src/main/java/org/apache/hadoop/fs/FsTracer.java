@@ -49,6 +49,7 @@ public final class FsTracer {
 
   @VisibleForTesting
   public static synchronized void clear() {
+/*
     if (instance == null) {
       return;
     }
@@ -57,6 +58,7 @@ public final class FsTracer {
     } finally {
       instance = null;
     }
+ */
   }
 
   private FsTracer() {

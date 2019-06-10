@@ -3,36 +3,36 @@ package org.apache.hadoop.tracing;
 import io.opentracing.SpanContext;
 
 public class Span {
-  private io.opentracing.Span span;
+  private io.opentracing.Span otspan;
 
   public Span(io.opentracing.Span span) {
-    this.span = span;
+    this.otspan = span;
   }
 
   public io.opentracing.Span span() {
-    return this.span;
+    return this.otspan;
   }
 
   public Span addKVAnnotation(String key, String value) {
-    this.span = span.setTag(key, value);
+    this.otspan = otspan.setTag(key, value);
     return this;
   }
 
   public Span addTimelineAnnotation(String msg) {
-    this.span = span.log(msg);
+    this.otspan = otspan.log(msg);
     return this;
   }
 
   public Span setSpanOT(io.opentracing.Span span) {
-    this.span = span;
+    this.otspan = span;
     return this;
   }
 
   public SpanContext context() {
-    return this.span.context();
+    return this.otspan.context();
   }
 
   public void finish() {
-    this.span.finish();
+    this.otspan.finish();
   }
 }
