@@ -4,10 +4,15 @@ import java.io.Closeable;
 
 public class TraceScope implements Closeable {
   private io.opentracing.Scope otscope;
+//  private io.opentracing.Span otspan;
 
   public TraceScope(io.opentracing.Scope scope) {
     this.otscope = scope;
   }
+
+//  public TraceScope(io.opentracing.Span span) {
+//    this.otspan = span;
+//  }
 
   public Span addKVAnnotation(String key, String value) {
     // Add tag to current active span
@@ -43,6 +48,7 @@ public class TraceScope implements Closeable {
   }
 
   public void detach() {
+    // does nothing
   }
 
   // TODO: need override or not?

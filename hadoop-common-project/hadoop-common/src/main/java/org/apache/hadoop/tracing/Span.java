@@ -2,8 +2,10 @@ package org.apache.hadoop.tracing;
 
 import io.opentracing.SpanContext;
 
-public class Span {
-  private io.opentracing.Span otspan;
+import java.io.Closeable;
+
+public class Span implements Closeable {
+  public io.opentracing.Span otspan;
 
   public Span(io.opentracing.Span span) {
     this.otspan = span;
@@ -34,5 +36,10 @@ public class Span {
 
   public void finish() {
     this.otspan.finish();
+  }
+
+  public void close() {
+    System.err.println("DEBUG: span close attempted");
+//    otspan.close();
   }
 }

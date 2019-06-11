@@ -163,7 +163,8 @@ public class TraceUtils {
       objStream.flush();
 
       byteString = ByteString.copyFrom(stream.toByteArray());
-      LOG.debug("SpanContext serialized, resulting byte length is " + byteString.size());
+      LOG.debug("SpanContext serialized, resulting byte length is {}",
+          byteString.size());
     } catch (IOException e) {
       LOG.warn("Could not serialize context {}", e);
     }

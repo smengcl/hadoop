@@ -37,6 +37,12 @@ public class Tracer {
     return new TraceScope(scope);
   }
 
+  public Span newSpan(String description, SpanContext spanCtx) {
+    io.opentracing.Span otspan = tracer.buildSpan(description)
+        .asChildOf(spanCtx).start();
+    return new Span(otspan);
+  }
+
   public TraceScope newScope(String description, SpanContext spanCtx) {
     io.opentracing.Scope otscope = tracer.buildSpan(description)
         .asChildOf(spanCtx).startActive(true);
@@ -48,6 +54,10 @@ public class Tracer {
     io.opentracing.Scope otscope = tracer.buildSpan(description)
         .asChildOf(spanCtx).startActive(finishSpanOnClose);
     return new TraceScope(otscope);
+  }
+
+  public TraceScope activateSpan(Span span) {
+    return new TraceScope(tracer.scopeManager().activate(span.otspan, true));
   }
 
   public void close() {
