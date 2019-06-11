@@ -723,7 +723,6 @@ public abstract class Server {
     private AtomicInteger responseWaitCount = new AtomicInteger(1);
     final RPC.RpcKind rpcKind;
     final byte[] clientId;
-//    private final TraceScope traceScope; // the HTrace scope on the server side
     private final Span span; // the OT span on the server side
     private final CallerContext callerContext; // the call context
     private boolean deferredResponse = false;
@@ -2549,7 +2548,7 @@ public abstract class Server {
       Span span = null;
       if (header.hasSpanContext()) {
         if (tracer == null) {
-          tracer = Tracer.curThreadTracer();  // Should work for now
+          tracer = Tracer.curThreadTracer();  // TODO: improve
         }
         if (tracer != null) {
           // If the incoming RPC includes tracing info, continue the trace
@@ -2558,11 +2557,8 @@ public abstract class Server {
           if (spanCtx != null) {
             span = tracer.newSpan(
                 RpcClientUtil.toTraceName(rpcRequest.toString()), spanCtx);
-//            span.detach();
           }
         }
-      } else {
-        System.err.println("*** NO SPAN CONTEXT");
       }
 
       CallerContext callerContext = null;
@@ -2797,7 +2793,7 @@ public abstract class Server {
       LOG.debug(Thread.currentThread().getName() + ": starting");
       SERVER.set(Server.this);
       while (running) {
-        TraceScope scope = null;
+        TraceScope traceScope = null;
         try {
           final Call call = callQueue.take(); // pop the queue; maybe blocked here
           if (alignmentContext != null && call.isCallCoordinated() &&
@@ -2823,8 +2819,7 @@ public abstract class Server {
           }
           CurCall.set(call);
           if (call.span != null) {
-//            call.span.reattach();
-            scope = tracer.activateSpan(call.span);
+            traceScope = tracer.activateSpan(call.span);
             call.span.addTimelineAnnotation("called");
           }
           // always update the current call context
@@ -2838,20 +2833,20 @@ public abstract class Server {
         } catch (InterruptedException e) {
           if (running) {                          // unexpected -- log it
             LOG.info(Thread.currentThread().getName() + " unexpectedly interrupted", e);
-            if (scope != null) {
-              scope.addTimelineAnnotation("unexpectedly interrupted: " +
+            if (traceScope != null) {
+              traceScope.addTimelineAnnotation("unexpectedly interrupted: " +
                   StringUtils.stringifyException(e));
             }
           }
         } catch (Exception e) {
           LOG.info(Thread.currentThread().getName() + " caught an exception", e);
-          if (scope != null) {
-            scope.addTimelineAnnotation("Exception: " +
+          if (traceScope != null) {
+            traceScope.addTimelineAnnotation("Exception: " +
                 StringUtils.stringifyException(e));
           }
         } finally {
           CurCall.set(null);
-          IOUtils.cleanupWithLogger(LOG, scope);
+          IOUtils.cleanupWithLogger(LOG, traceScope);
         }
       }
       LOG.debug(Thread.currentThread().getName() + ": exiting");

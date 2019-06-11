@@ -203,18 +203,14 @@ abstract public class FSOutputSummer extends OutputStream {
     return sum;
   }
 
-  protected Span createWriteSpan() {
-    return null;
-  }
-
+  // TODO: WIP
   protected TraceScope createWriteTraceScope() {
-    Span span = createWriteSpan();
+    Span span = null;  // TODO: Create a real span
     Scope scope = null;
     if (span != null) {
       scope = GlobalTracer.get().scopeManager().activate(span, true);
+      // TODO: Use scope = tracer.activateSpan(span) instead
     }
-    // TODO: not sure in which case this should be initialized
-//    return new TraceScope(span, scope);
     return null;
   }
 

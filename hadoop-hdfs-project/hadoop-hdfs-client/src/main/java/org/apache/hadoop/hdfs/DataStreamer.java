@@ -1176,6 +1176,7 @@ class DataStreamer extends Daemon {
           synchronized (dataQueue) {
             if (one.getSpan() != null) {
               scope = new TraceScope(Tracer.get().scopeManager().activate(one.getSpan().span(), true));
+              // TODO: Use scope = Tracer.curThreadTracer().activateSpan ?
               one.setSpan(null);
             }
             lastAckedSeqno = seqno;
