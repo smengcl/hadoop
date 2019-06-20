@@ -705,7 +705,7 @@ class DataStreamer extends Daemon {
               // last one FOR NOW. Moreover, we don't activate the Span for now.
               scope = dfsClient.getTracer().
                   newScope("dataStreamer", parents[0], false);
-//              scope.getSpan().setParents(parents);
+              //scope.getSpan().setParents(parents);
             }
           }
         }

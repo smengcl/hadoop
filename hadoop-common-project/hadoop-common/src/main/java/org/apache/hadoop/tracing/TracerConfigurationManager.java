@@ -21,9 +21,9 @@ import java.io.IOException;
 
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.tracing.SpanReceiverInfo.ConfigurationPair;
-//import org.apache.htrace.core.SpanReceiver;
-//import org.apache.htrace.core.TracerPool;
+/*import org.apache.hadoop.tracing.SpanReceiverInfo.ConfigurationPair;
+import org.apache.htrace.core.SpanReceiver;
+import org.apache.htrace.core.TracerPool;*/
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

@@ -55,7 +55,7 @@ public class TraceUtils {
 
   public static TraceConfiguration wrapHadoopConfOT(final String prefix,
       final Configuration conf) {
-    // A dummy call, just leave it like this, for now
+    // Do nothing for now. Might be useful for future config.
     return null;
   }
 
@@ -100,18 +100,14 @@ public class TraceUtils {
 
   public static Tracer createAndRegisterTracer() {
     if (!GlobalTracer.isRegistered()) {
-      LOG.info("!!! createAndRegisterTracer: GlobalTracer not registered.");
-
       io.jaegertracing.Configuration.ReporterConfiguration reporterConfig =
           io.jaegertracing.Configuration.ReporterConfiguration.fromEnv()
               .withLogSpans(true);
       io.jaegertracing.Configuration config =
-          io.jaegertracing.Configuration.fromEnv("Hadoop POC Refactored")
+          io.jaegertracing.Configuration.fromEnv("Hadoop")
               .withReporter(reporterConfig);
       Tracer tracer = config.getTracerBuilder()
           .withSampler(new ConstSampler(true)).build();
-
-      LOG.info("!!! trace class name: " + tracer.getClass().getCanonicalName());
       GlobalTracer.register(tracer);
     }
 

@@ -17,6 +17,8 @@ public class Tracer {
     return GlobalTracer.get();
   }
 
+  // Keeping this function at the moment for HTrace compatiblity,
+  // in fact all threads share a single global tracer for OpenTracing.
   public static Tracer curThreadTracer() {
     if (globalTracer == null) {
       globalTracer = new Tracer(GlobalTracer.get());
@@ -25,7 +27,7 @@ public class Tracer {
   }
 
   /***
-   * Return active span
+   * Return active span.
    * @return org.apache.hadoop.tracing.Span
    */
   public static Span getCurrentSpan() {
@@ -57,25 +59,19 @@ public class Tracer {
   }
 
   public TraceScope activateSpan(Span span) {
-    return new TraceScope(tracer.scopeManager().activate(span.otspan, true));
+    return new TraceScope(tracer.scopeManager().activate(span.otSpan, true));
   }
 
   public void close() {
   }
 
   public static class Builder {
-    // Dummy properties for HTrace code compatibility
-    private String name;
-    private TraceConfiguration conf;
-
     static Tracer globalTracer;
 
     public Builder(final String name) {
-      this.name = name;
     }
 
     public Builder conf(TraceConfiguration conf) {
-      this.conf = conf;
       return this;
     }
 

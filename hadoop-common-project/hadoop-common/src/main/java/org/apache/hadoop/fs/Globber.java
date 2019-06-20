@@ -56,7 +56,7 @@ class Globber {
     this.fc = fc;
     this.pathPattern = pathPattern;
     this.filter = filter;
-    this.tracer = fc.getTracer(); /*TraceUtils.createAndRegisterTracer();*/
+    this.tracer = fc.getTracer();
   }
 
   private FileStatus getFileStatus(Path path) throws IOException {

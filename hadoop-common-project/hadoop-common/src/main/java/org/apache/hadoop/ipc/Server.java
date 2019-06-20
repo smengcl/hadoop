@@ -723,7 +723,7 @@ public abstract class Server {
     private AtomicInteger responseWaitCount = new AtomicInteger(1);
     final RPC.RpcKind rpcKind;
     final byte[] clientId;
-    private final Span span; // the OT span on the server side
+    private final Span span; // the trace span on the server side
     private final CallerContext callerContext; // the call context
     private boolean deferredResponse = false;
     private int priorityLevel;
@@ -2548,10 +2548,12 @@ public abstract class Server {
       Span span = null;
       if (header.hasSpanContext()) {
         if (tracer == null) {
-          tracer = Tracer.curThreadTracer();  // TODO: improve
+          // TODO: Maybe set tracer using setTracer() ?
+          tracer = Tracer.curThreadTracer();
         }
         if (tracer != null) {
-          // If the incoming RPC includes tracing info, continue the trace
+          // If the incoming RPC included tracing info, always continue the
+          // trace
           SpanContext spanCtx = TraceUtils.byteStringToSpanContext(
               header.getSpanContext());
           if (spanCtx != null) {

@@ -37,7 +37,7 @@ import org.apache.hadoop.tracing.Tracer;
 public final class FsTracer {
   private static Tracer instance;
 
-  public static /*synchronized*/ Tracer get(Configuration conf) {
+  public static synchronized Tracer get(Configuration conf) {
     if (instance == null) {
       instance = new Tracer.Builder("FSClient").
           conf(TraceUtils.wrapHadoopConfOT(CommonConfigurationKeys.

@@ -1,45 +1,37 @@
 package org.apache.hadoop.tracing;
 
 import io.opentracing.SpanContext;
-
 import java.io.Closeable;
 
 public class Span implements Closeable {
-  public io.opentracing.Span otspan;
+  public io.opentracing.Span otSpan;
 
   public Span(io.opentracing.Span span) {
-    this.otspan = span;
+    this.otSpan = span;
   }
 
   public io.opentracing.Span span() {
-    return this.otspan;
+    return this.otSpan;
   }
 
   public Span addKVAnnotation(String key, String value) {
-    this.otspan = otspan.setTag(key, value);
+    this.otSpan = otSpan.setTag(key, value);
     return this;
   }
 
   public Span addTimelineAnnotation(String msg) {
-    this.otspan = otspan.log(msg);
-    return this;
-  }
-
-  public Span setSpanOT(io.opentracing.Span span) {
-    this.otspan = span;
+    this.otSpan = otSpan.log(msg);
     return this;
   }
 
   public SpanContext context() {
-    return this.otspan.context();
+    return this.otSpan.context();
   }
 
   public void finish() {
-    this.otspan.finish();
+    this.otSpan.finish();
   }
 
   public void close() {
-    System.err.println("DEBUG: span close attempted");
-//    otspan.close();
   }
 }
