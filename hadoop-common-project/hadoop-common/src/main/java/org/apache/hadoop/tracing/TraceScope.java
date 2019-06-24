@@ -28,7 +28,7 @@ public class TraceScope implements Closeable {
 
   // Add tag to current active span
   public Span addKVAnnotation(String key, String value) {
-    // TODO: Try to reduce overhead from creating new object
+    // TODO: Try to reduce overhead from "new" object by returning void?
     return new Span(this.otScope.span().setTag(key, value));
   }
 
@@ -41,7 +41,6 @@ public class TraceScope implements Closeable {
   }
 
   public Span getSpan() {
-    // TODO: Need to assign ot span from scope?
     /* e.g.
       TraceScope scope = tracer.newScope(instance.getCommandName());
       if (scope.getSpan() != null) {
@@ -50,13 +49,11 @@ public class TraceScope implements Closeable {
   }
 
   public void reattach() {
-    // TODO
-    // Server.java:2820
-    //scope = GlobalTracer.get().scopeManager().activate(call.span, true);
+    // TODO: Server.java:2820
+    // scope = GlobalTracer.get().scopeManager().activate(call.span, true);
   }
 
   public void detach() {
-    // Do nothing
   }
 
   public void close() {
