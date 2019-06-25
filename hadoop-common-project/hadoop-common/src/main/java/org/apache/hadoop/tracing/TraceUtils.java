@@ -100,12 +100,8 @@ public class TraceUtils {
 
   public static Tracer createAndRegisterTracer(String name) {
     if (!GlobalTracer.isRegistered()) {
-      io.jaegertracing.Configuration.ReporterConfiguration reporterConfig =
-          io.jaegertracing.Configuration.ReporterConfiguration.fromEnv()
-              .withLogSpans(true);
       io.jaegertracing.Configuration config =
-          io.jaegertracing.Configuration.fromEnv(name)
-              .withReporter(reporterConfig);
+          io.jaegertracing.Configuration.fromEnv(name);
       Tracer tracer = config.getTracerBuilder().build();
       GlobalTracer.register(tracer);
     }
