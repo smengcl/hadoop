@@ -106,8 +106,7 @@ public class TraceUtils {
       io.jaegertracing.Configuration config =
           io.jaegertracing.Configuration.fromEnv(name)
               .withReporter(reporterConfig);
-      Tracer tracer = config.getTracerBuilder()
-          .withSampler(new ConstSampler(true)).build();
+      Tracer tracer = config.getTracerBuilder().build();
       GlobalTracer.register(tracer);
     }
 
