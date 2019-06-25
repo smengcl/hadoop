@@ -51,7 +51,7 @@ public class Tracer {
     io.opentracing.Span span = GlobalTracer.get().activeSpan();
     if (span != null) {
       // Only wrap the OpenTracing span when it isn't null
-      return new Span(GlobalTracer.get().activeSpan());
+      return new Span(span);
     } else {
       return null;
     }
