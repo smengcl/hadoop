@@ -48,7 +48,13 @@ public class Tracer {
    * @return org.apache.hadoop.tracing.Span
    */
   public static Span getCurrentSpan() {
-    return new Span(GlobalTracer.get().activeSpan());
+    io.opentracing.Span span = GlobalTracer.get().activeSpan();
+    if (span != null) {
+      // Only wrap the OpenTracing span when it isn't null
+      return new Span(GlobalTracer.get().activeSpan());
+    } else {
+      return null;
+    }
   }
 
   public TraceScope newScope(String description) {
