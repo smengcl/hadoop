@@ -98,13 +98,13 @@ public class TraceUtils {
     };
   }
 
-  public static Tracer createAndRegisterTracer() {
+  public static Tracer createAndRegisterTracer(String name) {
     if (!GlobalTracer.isRegistered()) {
       io.jaegertracing.Configuration.ReporterConfiguration reporterConfig =
           io.jaegertracing.Configuration.ReporterConfiguration.fromEnv()
               .withLogSpans(true);
       io.jaegertracing.Configuration config =
-          io.jaegertracing.Configuration.fromEnv("Hadoop")
+          io.jaegertracing.Configuration.fromEnv(name)
               .withReporter(reporterConfig);
       Tracer tracer = config.getTracerBuilder()
           .withSampler(new ConstSampler(true)).build();

@@ -85,7 +85,10 @@ public class Tracer {
   public static class Builder {
     static Tracer globalTracer;
 
+    private String name;
+
     public Builder(final String name) {
+      this.name = name;
     }
 
     public Builder conf(TraceConfiguration conf) {
@@ -94,7 +97,7 @@ public class Tracer {
 
     public Tracer build() {
       if (globalTracer == null) {
-        io.opentracing.Tracer oTracer = TraceUtils.createAndRegisterTracer();
+        io.opentracing.Tracer oTracer = TraceUtils.createAndRegisterTracer(name);
         globalTracer = new Tracer(oTracer);
       }
       return globalTracer;
