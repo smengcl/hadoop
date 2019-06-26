@@ -26,9 +26,13 @@ public class TraceScope implements Closeable {
     this.otScope = scope;
   }
 
-  // Add tag to current active span
+  // Add tag to the span
   public Span addKVAnnotation(String key, String value) {
     // TODO: Try to reduce overhead from "new" object by returning void?
+    return new Span(this.otScope.span().setTag(key, value));
+  }
+
+  public Span addKVAnnotation(String key, Number value) {
     return new Span(this.otScope.span().setTag(key, value));
   }
 
