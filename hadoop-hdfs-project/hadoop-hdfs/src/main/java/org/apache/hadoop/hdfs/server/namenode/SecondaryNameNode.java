@@ -493,6 +493,7 @@ public class SecondaryNameNode implements Runnable,
     infoServer.setAttribute("secondary.name.node", this);
     infoServer.setAttribute("name.system.image", checkpointImage);
     infoServer.setAttribute(JspHelper.CURRENT_CONF, conf);
+    infoServer.addInternalServlet("fsck", "/fsck", FsckServlet.class, true);
     infoServer.addInternalServlet("imagetransfer", ImageServlet.PATH_SPEC,
         ImageServlet.class, true);
     infoServer.start();
