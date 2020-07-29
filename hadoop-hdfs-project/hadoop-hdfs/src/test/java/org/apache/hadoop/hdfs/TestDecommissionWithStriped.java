@@ -1102,4 +1102,37 @@ public class TestDecommissionWithStriped {
         originBytesArray, readBytesArray, ecPolicy);
     cleanupFile(dfs, ecFile);
   }
+
+  @Test(timeout = 120000)
+  public void testDecomCorruptFile() throws Exception {
+    int fileLen = 10*1024*1024;
+
+    Path file = new Path(ecDir,"testcorruptfile");
+
+    writeStripedFile(dfs, file, fileLen);
+
+    LocatedBlocks locatedBlocks =
+        StripedFileTestUtil.getLocatedBlocks(file, dfs);
+
+    LocatedStripedBlock lastBlock =
+        (LocatedStripedBlock)locatedBlocks.getLastLocatedBlock();
+    DatanodeInfo[] storageInfos = lastBlock.getLocations();
+
+    // Kill PARITY_BLOCKS + 1 datanodes to corrupt the EC file
+    ArrayList<DataNode> dns = cluster.getDataNodes();
+    for (int i=0; i<parityBlocks + 1; i++) {
+      DatanodeInfo id = storageInfos[i];
+      for (DataNode dn : dns) {
+        if (dn.getDatanodeId().equals(id)) {
+          dn.shutdown();
+          cluster.setDataNodeDead(dn.getDatanodeId());
+        }
+      }
+    }
+    // Now decommission a DN hosting a live block of the corrupted EC file
+    ArrayList<DatanodeInfo> decom = new ArrayList<>();
+    decom.add(storageInfos[parityBlocks+1]);
+    decommissionNode(0, decom, AdminStates.DECOMMISSIONED);
+  }
+
 }
