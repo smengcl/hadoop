@@ -108,7 +108,20 @@ public final class NameNodeUtils {
 
     int port = 0;
     if (currentNnAddress.contains(":")) {
-      port = Integer.parseInt(currentNnAddress.split(":")[1]);
+      // Bracket-aware port extraction for IPv6 authority forms like
+      // "[::1]:8020"; naive split(":")[1] yields the empty string and
+      // throws NumberFormatException. (HADOOP-XXXXX-F5 follow-on.)
+      int rb = currentNnAddress.lastIndexOf(']');
+      int colon = rb >= 0
+          ? currentNnAddress.indexOf(':', rb)
+          : currentNnAddress.lastIndexOf(':');
+      if (colon >= 0 && colon < currentNnAddress.length() - 1) {
+        try {
+          port = Integer.parseInt(currentNnAddress.substring(colon + 1));
+        } catch (NumberFormatException nfe) {
+          port = 0;
+        }
+      }
     }
 
     if (port > 0) {

@@ -230,6 +230,7 @@ public class MiniDFSCluster implements AutoCloseable {
     private Configuration[] dnConfOverlays;
     private boolean skipFsyncForTesting = true;
     private boolean useConfiguredTopologyMappingClass = false;
+    private String bindHost = "127.0.0.1";
 
     public Builder(Configuration conf) {
       this.conf = conf;
@@ -514,6 +515,16 @@ public class MiniDFSCluster implements AutoCloseable {
     }
 
     /**
+     * Set the host address used for all cluster bind addresses (NN HTTP/RPC,
+     * DN transfer/HTTP/IPC, and fs.defaultFS). Defaults to {@code "127.0.0.1"}
+     * for backwards compatibility. Use {@code "::1"} to bind on IPv6 loopback.
+     */
+    public Builder bindHost(String host) {
+      this.bindHost = host;
+      return this;
+    }
+
+    /**
      * set the value of DFS_NAMENODE_REDUNDANCY_CONSIDERLOAD_KEY in the config
      * file.
      *
@@ -570,6 +581,7 @@ public class MiniDFSCluster implements AutoCloseable {
         + ", numDataNodes=" + builder.numDataNodes);
 
     this.storagesPerDatanode = builder.storagesPerDatanode;
+    this.bindHost = builder.bindHost;
 
     // Duplicate the storageType setting for each DN.
     if (builder.storageTypes == null && builder.storageTypes1D != null) {
@@ -616,7 +628,8 @@ public class MiniDFSCluster implements AutoCloseable {
                        builder.skipFsyncForTesting,
                        builder.useConfiguredTopologyMappingClass,
                        builder.dnHttpPorts,
-                       builder.dnIpcPorts);
+                       builder.dnIpcPorts,
+                       builder.bindHost);
   }
   
   public static class DataNodeProperties {
@@ -648,6 +661,8 @@ public class MiniDFSCluster implements AutoCloseable {
   private Configuration conf;
   private Multimap<String, NameNodeInfo> namenodes = ArrayListMultimap.create();
   protected int numDataNodes;
+  /** The host address used for all bind addresses in this cluster. */
+  private String bindHost = "127.0.0.1";
   protected final List<DataNodeProperties> dataNodes =
                          new ArrayList<DataNodeProperties>();
   private File base_dir;
@@ -890,7 +905,7 @@ public class MiniDFSCluster implements AutoCloseable {
                        operation, null, racks, hosts,
                        null, simulatedCapacities, null, true, false,
                        MiniDFSNNTopology.simpleSingleNN(nameNodePort, 0),
-                       true, false, false, null, true, false, null, null);
+                       true, false, false, null, true, false, null, null, "127.0.0.1");
   }
 
   private void initMiniDFSCluster(
@@ -910,7 +925,8 @@ public class MiniDFSCluster implements AutoCloseable {
       boolean skipFsyncForTesting,
       boolean useConfiguredTopologyMappingClass,
       int[] dnHttpPorts,
-      int[] dnIpcPorts)
+      int[] dnIpcPorts,
+      String bindHost)
   throws IOException {
     boolean success = false;
     try {
@@ -924,6 +940,7 @@ public class MiniDFSCluster implements AutoCloseable {
       }
 
       this.conf = conf;
+      this.bindHost = bindHost;
       base_dir = new File(determineDfsBaseDir());
       data_dir = new File(base_dir, "data");
       this.waitSafeMode = waitSafeMode;
@@ -1032,8 +1049,12 @@ public class MiniDFSCluster implements AutoCloseable {
       boolean manageNameDfsDirs, boolean manageNameDfsSharedDirs,
       boolean enableManagedDfsDirsRedundancy, boolean format,
       StartupOption operation, String clusterId) throws IOException {
-    // do the basic namenode configuration
+    // do the basic namenode configuration (uses 127.0.0.1 as placeholder)
     configureNameNodes(nnTopology, federation, conf);
+    // If a custom bindHost was requested, patch the addresses set above.
+    if (!"127.0.0.1".equals(bindHost)) {
+      applyBindHostToNameNodeConf(nnTopology, federation, conf, bindHost);
+    }
 
     int nnCounter = 0;
     int nsCounter = 0;
@@ -1362,18 +1383,43 @@ public class MiniDFSCluster implements AutoCloseable {
    */
   private static void initNameNodeAddress(Configuration conf,
       String nameserviceId, NNConf nnConf) {
+    initNameNodeAddress(conf, nameserviceId, nnConf, "127.0.0.1");
+  }
+
+  private static void initNameNodeAddress(Configuration conf,
+      String nameserviceId, NNConf nnConf, String host) {
     // Set NN-specific specific key
     String key = DFSUtil.addKeySuffixes(
         DFS_NAMENODE_HTTP_ADDRESS_KEY, nameserviceId,
         nnConf.getNnId());
-    conf.set(key, "127.0.0.1:" + nnConf.getHttpPort());
+    conf.set(key, NetUtils.formatHostPort(host, nnConf.getHttpPort()));
 
     key = DFSUtil.addKeySuffixes(
         DFS_NAMENODE_RPC_ADDRESS_KEY, nameserviceId,
         nnConf.getNnId());
-    conf.set(key, "127.0.0.1:" + nnConf.getIpcPort());
+    conf.set(key, NetUtils.formatHostPort(host, nnConf.getIpcPort()));
   }
-  
+
+  /**
+   * Re-applies NameNode addresses using {@code bindHost} instead of the
+   * default {@code 127.0.0.1} written by {@link #configureNameNodes}.
+   * Also patches {@code fs.defaultFS} for single-NN non-federated clusters.
+   */
+  private static void applyBindHostToNameNodeConf(
+      MiniDFSNNTopology nnTopology, boolean federation,
+      Configuration conf, String bindHost) {
+    if (!federation && nnTopology.countNameNodes() == 1) {
+      NNConf onlyNN = nnTopology.getOnlyNameNode();
+      conf.set(FS_DEFAULT_NAME_KEY,
+          "hdfs://" + NetUtils.formatHostPort(bindHost, onlyNN.getIpcPort()));
+    }
+    for (MiniDFSNNTopology.NSConf nameservice : nnTopology.getNameservices()) {
+      for (NNConf nn : nameservice.getNNs()) {
+        initNameNodeAddress(conf, nameservice.getId(), nn, bindHost);
+      }
+    }
+  }
+
   private static String[] createArgs(StartupOption operation) {
     if (operation == StartupOption.ROLLINGUPGRADE) {
       return new String[]{operation.getName(),
@@ -1695,9 +1741,9 @@ public class MiniDFSCluster implements AutoCloseable {
     }
 
     if (checkDataNodeHostConfig) {
-      conf.setIfUnset(DFS_DATANODE_HOST_NAME_KEY, "127.0.0.1");
+      conf.setIfUnset(DFS_DATANODE_HOST_NAME_KEY, bindHost);
     } else {
-      conf.set(DFS_DATANODE_HOST_NAME_KEY, "127.0.0.1");
+      conf.set(DFS_DATANODE_HOST_NAME_KEY, bindHost);
     }
 
     int curDatanodesNum = dataNodes.size();
@@ -3423,7 +3469,7 @@ public class MiniDFSCluster implements AutoCloseable {
   
     String nnId = null;
     initNameNodeAddress(conf, nameserviceId,
-        new NNConf(nnId).setIpcPort(namenodePort));
+        new NNConf(nnId).setIpcPort(namenodePort), bindHost);
     // figure out the current number of NNs
     NameNodeInfo[] infos = this.getNameNodeInfos(nameserviceId);
     int nnIndex = infos == null ? 0 : infos.length;
@@ -3458,7 +3504,7 @@ public class MiniDFSCluster implements AutoCloseable {
         throw new IOException("Parameter dfs.hosts is not setup in conf");
       }
       // Setup datanode in the include file, if it is defined in the conf
-      String address = "127.0.0.1:" + NetUtils.getFreeSocketPort();
+      String address = NetUtils.formatHostPort(bindHost, NetUtils.getFreeSocketPort());
       if (checkDataNodeAddrConfig) {
         conf.setIfUnset(DFS_DATANODE_ADDRESS_KEY, address);
       } else {
@@ -3468,17 +3514,23 @@ public class MiniDFSCluster implements AutoCloseable {
       LOG.info("Adding datanode " + address + " to hosts file " + hostsFile);
     } else {
       if (checkDataNodeAddrConfig) {
-        conf.setIfUnset(DFS_DATANODE_ADDRESS_KEY, "127.0.0.1:0");
+        conf.setIfUnset(DFS_DATANODE_ADDRESS_KEY,
+            NetUtils.formatHostPort(bindHost, 0));
       } else {
-        conf.set(DFS_DATANODE_ADDRESS_KEY, "127.0.0.1:0");
+        conf.set(DFS_DATANODE_ADDRESS_KEY,
+            NetUtils.formatHostPort(bindHost, 0));
       }
     }
     if (checkDataNodeAddrConfig) {
-      conf.setIfUnset(DFS_DATANODE_HTTP_ADDRESS_KEY, "127.0.0.1:" + httpPort);
-      conf.setIfUnset(DFS_DATANODE_IPC_ADDRESS_KEY, "127.0.0.1:" + ipcPort);
+      conf.setIfUnset(DFS_DATANODE_HTTP_ADDRESS_KEY,
+          NetUtils.formatHostPort(bindHost, httpPort));
+      conf.setIfUnset(DFS_DATANODE_IPC_ADDRESS_KEY,
+          NetUtils.formatHostPort(bindHost, ipcPort));
     } else {
-      conf.set(DFS_DATANODE_HTTP_ADDRESS_KEY, "127.0.0.1:" + httpPort);
-      conf.set(DFS_DATANODE_IPC_ADDRESS_KEY, "127.0.0.1:" + ipcPort);
+      conf.set(DFS_DATANODE_HTTP_ADDRESS_KEY,
+          NetUtils.formatHostPort(bindHost, httpPort));
+      conf.set(DFS_DATANODE_IPC_ADDRESS_KEY,
+          NetUtils.formatHostPort(bindHost, ipcPort));
     }
   }
   
