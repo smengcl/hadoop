@@ -22,6 +22,8 @@ import java.io.EOFException;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
 import java.nio.channels.ClosedChannelException;
@@ -125,11 +127,31 @@ public abstract class ChecksumFileSystem extends FilterFileSystem {
   /**
    * Return the name of the checksum file associated with a file.
    *
+   * <p>The two-argument {@code Path(Path, String)} constructor would
+   * route the child component through {@code new Path(String)}, which
+   * URI-parses it and rejects colons (since {@code Path.initialize}
+   * treats them as scheme delimiters). That breaks IPv6-bearing
+   * filenames such as
+   * {@code BP-12345-fd00:dead:beef::10-1234567890} (HADOOP-17845).
+   * Instead, build the URI directly with a path that does not get
+   * re-parsed.
+   *
    * @param file the file path.
    * @return name of the checksum file associated with a file.
    */
   public Path getChecksumFile(Path file) {
-    return new Path(file.getParent(), "." + file.getName() + ".crc");
+    URI parentUri = file.getParent().toUri();
+    String parentPath = parentUri.getPath();
+    if (!parentPath.endsWith("/")) {
+      parentPath = parentPath + "/";
+    }
+    String childPath = parentPath + "." + file.getName() + ".crc";
+    try {
+      return new Path(new URI(parentUri.getScheme(), parentUri.getAuthority(),
+          childPath, null, parentUri.getFragment()));
+    } catch (URISyntaxException e) {
+      throw new IllegalArgumentException(e);
+    }
   }
 
   /**
