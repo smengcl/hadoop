@@ -76,12 +76,11 @@ public class DNS {
   public static String reverseDns(InetAddress hostIp, @Nullable String ns)
     throws NamingException {
     //
-    // Builds the reverse IP lookup form
-    // This is formed by reversing the IP numbers and appending in-addr.arpa
+    // Builds the reverse IP lookup form. IPv4 addresses use the dotted
+    // in-addr.arpa form; IPv6 addresses use the nibble-reversed ip6.arpa
+    // form per RFC 3596.
     //
-    String[] parts = hostIp.getHostAddress().split("\\.");
-    String reverseIP = parts[3] + "." + parts[2] + "." + parts[1] + "."
-      + parts[0] + ".in-addr.arpa";
+    String reverseIP = buildReverseDnsName(hostIp);
 
     DirContext ictx = new InitialDirContext();
     Attributes attribute;
@@ -100,6 +99,61 @@ public class DNS {
       hostname = hostname.substring(0, hostnameLength - 1);
     }
     return hostname;
+  }
+
+  /**
+   * Construct the reverse-DNS name for an address.
+   *
+   * IPv4 produces {@code D.C.B.A.in-addr.arpa}; IPv6 produces the 32-nibble
+   * reversed form ending in {@code ip6.arpa}.
+   */
+  static String buildReverseDnsName(InetAddress hostIp) {
+    byte[] bytes = hostIp.getAddress();
+    if (bytes.length == 4) {
+      return buildIPv4ReverseName(bytes, 0);
+    }
+    if (bytes.length == 16) {
+      // IPv4-mapped IPv6 (::ffff:1.2.3.4) and IPv4-compatible IPv6
+      // (::1.2.3.4) preserve the IPv4 octets in the last 4 bytes. The
+      // pre-existing dotted-form split routed these to in-addr.arpa,
+      // which is what DNS operators expect; nibble-reverse to ip6.arpa
+      // would silently break PTR lookups for them.
+      if (isIPv4Embedded(bytes)) {
+        return buildIPv4ReverseName(bytes, 12);
+      }
+      StringBuilder sb = new StringBuilder(80);
+      for (int i = 15; i >= 0; i--) {
+        int b = bytes[i] & 0xff;
+        sb.append(Character.forDigit(b & 0x0f, 16)).append('.');
+        sb.append(Character.forDigit((b >> 4) & 0x0f, 16)).append('.');
+      }
+      sb.append("ip6.arpa");
+      return sb.toString();
+    }
+    throw new IllegalArgumentException(
+        "Unsupported address length " + bytes.length + " for " + hostIp);
+  }
+
+  private static String buildIPv4ReverseName(byte[] bytes, int offset) {
+    StringBuilder sb = new StringBuilder(32);
+    for (int i = offset + 3; i >= offset; i--) {
+      sb.append(bytes[i] & 0xff).append('.');
+    }
+    sb.append("in-addr.arpa");
+    return sb.toString();
+  }
+
+  private static boolean isIPv4Embedded(byte[] bytes) {
+    // Strictly IPv4-mapped IPv6: ::ffff:a.b.c.d. The IPv4-compatible
+    // form (::a.b.c.d) is deprecated by RFC 4291 and clashes with the
+    // unspecified (::) and loopback (::1) IPv6 addresses; do not treat
+    // it as IPv4-embedded.
+    for (int i = 0; i < 10; i++) {
+      if (bytes[i] != 0) {
+        return false;
+      }
+    }
+    return bytes[10] == (byte) 0xff && bytes[11] == (byte) 0xff;
   }
 
   /**
