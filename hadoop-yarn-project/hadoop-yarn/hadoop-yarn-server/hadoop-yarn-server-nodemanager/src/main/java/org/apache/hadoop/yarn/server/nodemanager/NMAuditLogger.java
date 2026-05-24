@@ -22,6 +22,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.hadoop.ipc.Server;
+import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.yarn.api.records.ApplicationId;
 import org.apache.hadoop.yarn.api.records.ContainerId;
 
@@ -183,7 +184,7 @@ public class NMAuditLogger {
     InetAddress ip = Server.getRemoteIp();
     // ip address can be null for testcases
     if (ip != null) {
-      add(Keys.IP, ip.getHostAddress(), b);
+      add(Keys.IP, NetUtils.normalizeIp(ip), b);
     }
   }
 

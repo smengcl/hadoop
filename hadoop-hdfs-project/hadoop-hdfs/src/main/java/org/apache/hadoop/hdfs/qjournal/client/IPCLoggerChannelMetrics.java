@@ -27,6 +27,7 @@ import org.apache.hadoop.metrics2.annotation.Metrics;
 import org.apache.hadoop.metrics2.lib.DefaultMetricsSystem;
 import org.apache.hadoop.metrics2.lib.MetricsRegistry;
 import org.apache.hadoop.metrics2.lib.MutableQuantiles;
+import org.apache.hadoop.net.NetUtils;
 
 /**
  * The metrics for a journal from the writer's perspective.
@@ -77,12 +78,23 @@ class IPCLoggerChannelMetrics {
 
   private static String getName(IPCLoggerChannel ch) {
     InetSocketAddress addr = ch.getRemoteAddress();
-    String addrStr = addr.getAddress().getHostAddress();
-    
+    // Unresolved sockets carry no InetAddress; fall back to the
+    // hostname so we never NPE the dot-replace below.
+    String addrStr;
+    if (addr.isUnresolved() || addr.getAddress() == null) {
+      addrStr = addr.getHostString();
+    } else {
+      // Canonicalize via NetUtils.normalizeIp (RFC 5952 compressed
+      // form) so that ":" replacement produces stable MBean names
+      // regardless of whether the JDK or DNS gave us the expanded or
+      // compressed form. (HADOOP-XXXXX-F22)
+      addrStr = NetUtils.normalizeIp(addr.getAddress());
+    }
+
     // IPv6 addresses have colons, which aren't allowed as part of
     // MBean names. Replace with '.'
     addrStr = addrStr.replace(':', '.');
-    
+
     return "IPCLoggerChannel-" + addrStr +
         "-" + addr.getPort();
   }

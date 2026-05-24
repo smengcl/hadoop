@@ -437,7 +437,10 @@ public abstract class Server {
    */
   public static String getRemoteAddress() {
     InetAddress addr = getRemoteIp();
-    return (addr == null) ? null : addr.getHostAddress();
+    // Emit canonical compressed form so IPv6 addresses don't appear as
+    // both "fd00:dead:beef::21" and "fd00:dead:beef:0:0:0:0:21" in
+    // audit logs. IPv4 is unchanged.
+    return (addr == null) ? null : NetUtils.normalizeIp(addr);
   }
 
   /** Returns the RPC remote user when invoked inside an RPC.  Note this
@@ -2142,8 +2145,9 @@ public abstract class Server {
       if (addr == null) {
         this.hostAddress = "*Unknown*";
       } else {
-        // host IP address
-        this.hostAddress = addr.getHostAddress();
+        // host IP address - canonical compressed form so IPv6 entries
+        // are stable across audit-log emissions (HADOOP-XXXXX-F22).
+        this.hostAddress = NetUtils.normalizeIp(addr);
       }
       this.remotePort = socket.getPort();
       this.responseQueue = new LinkedList<RpcCall>();

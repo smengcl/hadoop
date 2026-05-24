@@ -24,6 +24,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.apache.hadoop.ipc.CallerContext;
 import org.apache.hadoop.ipc.Server;
+import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.yarn.api.records.ApplicationAttemptId;
 import org.apache.hadoop.yarn.api.records.ApplicationId;
 import org.apache.hadoop.yarn.api.records.ContainerId;
@@ -107,7 +108,7 @@ public class RMAuditLogger {
     StringBuilder b = new StringBuilder();
     start(Keys.USER, user, b);
     if (ip != null) {
-      add(Keys.IP, ip.getHostAddress(), b);
+      add(Keys.IP, NetUtils.normalizeIp(ip), b);
     }
     add(Keys.OPERATION, operation, b);
     add(Keys.TARGET, target ,b);
@@ -629,7 +630,7 @@ public class RMAuditLogger {
     InetAddress ip = Server.getRemoteIp();
     // ip address can be null for testcases
     if (ip != null) {
-      add(Keys.IP, ip.getHostAddress(), b);
+      add(Keys.IP, NetUtils.normalizeIp(ip), b);
     }
   }
 

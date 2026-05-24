@@ -58,6 +58,7 @@ import org.apache.hadoop.security.AccessControlException;
 import org.apache.hadoop.security.SecurityUtil;
 import org.apache.hadoop.thirdparty.com.google.common.cache.Cache;
 import org.apache.hadoop.thirdparty.com.google.common.cache.CacheBuilder;
+import org.apache.hadoop.thirdparty.com.google.common.net.InetAddresses;
 import org.apache.hadoop.util.ReflectionUtils;
 import org.apache.hadoop.util.Preconditions;
 import org.apache.hadoop.util.dynamic.DynConstructors;
@@ -956,6 +957,25 @@ public class NetUtils {
       return formatAddress(addr);
     }
     return addr.getHostName() + ":" + addr.getPort();
+  }
+
+  /**
+   * Return the canonical RFC 5952 representation of an IP address. IPv6
+   * addresses are emitted in compressed form (e.g. {@code fd00:dead:beef::21}
+   * rather than the JDK-default expanded {@code fd00:dead:beef:0:0:0:0:21});
+   * IPv4 addresses are returned unchanged. The result is suitable for
+   * inclusion in metric labels, audit-log fields, and JMX bean names where
+   * a single canonical representation is required so identical addresses
+   * are not double-counted in dashboards.
+   *
+   * @param addr non-null InetAddress
+   * @return canonical compressed-form string
+   */
+  public static String normalizeIp(InetAddress addr) {
+    if (addr == null) {
+      return null;
+    }
+    return InetAddresses.toAddrString(addr);
   }
 
   /**

@@ -242,4 +242,25 @@ public class TestNetUtilsIPv6 {
     assertFalse(connect.getAddress().isAnyLocalAddress());
     assertEquals(8020, connect.getPort());
   }
+
+  @Test
+  public void testNormalizeIpEmitsCanonicalCompressedIPv6() throws Exception {
+    // Whether the JDK gives us the expanded or already-compressed form,
+    // normalizeIp must emit the RFC 5952 compressed canonical form.
+    InetAddress expanded = InetAddress.getByName("fd00:dead:beef:0:0:0:0:21");
+    assertEquals("fd00:dead:beef::21", NetUtils.normalizeIp(expanded));
+    InetAddress loop = InetAddress.getByName("::1");
+    assertEquals("::1", NetUtils.normalizeIp(loop));
+  }
+
+  @Test
+  public void testNormalizeIpIPv4Unchanged() throws Exception {
+    InetAddress v4 = InetAddress.getByName("127.0.0.1");
+    assertEquals("127.0.0.1", NetUtils.normalizeIp(v4));
+  }
+
+  @Test
+  public void testNormalizeIpNullReturnsNull() {
+    assertEquals(null, NetUtils.normalizeIp((InetAddress) null));
+  }
 }

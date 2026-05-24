@@ -19,6 +19,7 @@
 package org.apache.hadoop.yarn.server.router;
 
 import org.apache.hadoop.ipc.Server;
+import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.yarn.api.records.ApplicationId;
 import org.apache.hadoop.yarn.server.federation.store.records.SubClusterId;
 import org.slf4j.Logger;
@@ -359,7 +360,7 @@ public final class RouterAuditLogger {
     InetAddress ip = Server.getRemoteIp();
     // ip address can be null for testcases
     if (ip != null) {
-      add(Keys.IP, ip.getHostAddress(), b);
+      add(Keys.IP, NetUtils.normalizeIp(ip), b);
     }
   }
 }
