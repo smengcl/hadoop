@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.BindException;
+import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.NetworkInterface;
@@ -238,12 +239,33 @@ public class NetUtils {
     }
     target = target.trim();
     boolean hasScheme = target.contains("://");
+    // java.net.URI requires IPv6 literals to be wrapped in brackets in the
+    // authority component (RFC 3986). Operators frequently configure
+    // address values without brackets, e.g. "::1:8020" or "fe80::1%eth0:8020"
+    // - bracket the host before parsing so URI.create accepts them. Zone
+    // identifiers (%scope) are not permitted in URI authorities at all, so
+    // we strip them here; the resolved socket address still binds correctly
+    // because the JVM resolves zoned literals via getByName separately.
+    if (!hasScheme) {
+      target = bracketUnbracketedIPv6(target);
+    }
     URI uri = createURI(target, hasScheme, helpText, useCacheIfPresent);
 
     String host = uri.getHost();
     int port = uri.getPort();
     if (port == -1) {
       port = defaultPort;
+    }
+    // For an IPv6 authority like "[::1]:8020", URI.getHost() returns the
+    // host wrapped in brackets ("[::1]"). Downstream consumers in
+    // SecurityUtil (notably QualifiedHostResolver, used when
+    // hadoop.security.token.service.use_ip=false) and Guava's
+    // InetAddresses do not accept the bracketed form and would treat the
+    // string as an unresolvable hostname. Strip the brackets here so the
+    // numeric IPv6 form reaches the resolver.
+    if (host != null && host.length() > 1
+        && host.charAt(0) == '[' && host.charAt(host.length() - 1) == ']') {
+      host = host.substring(1, host.length() - 1);
     }
     String path = uri.getPath();
 
@@ -265,6 +287,87 @@ public class NetUtils {
       .maximumSize(URI_CACHE_SIZE_DEFAULT)
       .expireAfterWrite(URI_CACHE_EXPIRE_TIME_DEFAULT, TimeUnit.HOURS)
       .build();
+
+  /**
+   * If {@code target} is an unbracketed IPv6 literal (with or without a
+   * {@code :port} suffix and with or without a {@code %zone} identifier),
+   * wrap the address in brackets so {@link URI#create(String)} can parse
+   * it. Zone identifiers are stripped because URI authorities forbid
+   * {@code %}.
+   *
+   * Inputs that are already bracketed, that are IPv4 literals, that are
+   * hostnames (zero or one colon), or that are not parseable as IPv6
+   * literals are returned unchanged. Disambiguation between a bare IPv6
+   * literal and "ipv6:port" is resolved by validating the candidate host
+   * via {@link InetAddress#getByName(String)} (only invoked on inputs
+   * that pass a strict literal-charset screen, so no DNS queries).
+   */
+  static String bracketUnbracketedIPv6(String target) {
+    if (target == null || target.isEmpty() || target.charAt(0) == '[') {
+      return target;
+    }
+    int firstColon = target.indexOf(':');
+    int lastColon = target.lastIndexOf(':');
+    // Zero or one colon: hostname or IPv4[:port] - no IPv6 literal possible.
+    if (firstColon == lastColon) {
+      return target;
+    }
+    // Try splitting at the last colon as host:port. The split is valid
+    // only if the trailing portion is all digits AND the leading portion
+    // (after zone-id strip) is a recognizable IPv6 literal.
+    String hostCandidate = target.substring(0, lastColon);
+    String portCandidate = target.substring(lastColon + 1);
+    String hostForCheck = stripZoneId(hostCandidate);
+    if (isAllDigits(portCandidate) && isIPv6Literal(hostForCheck)) {
+      return "[" + hostForCheck + "]:" + portCandidate;
+    }
+    // Otherwise treat the whole input as a bare host. If it parses as an
+    // IPv6 literal, bracket it; if not, return unchanged so URI parsing
+    // can surface the operator's typo with its own error message.
+    String hostOnly = stripZoneId(target);
+    if (isIPv6Literal(hostOnly)) {
+      return "[" + hostOnly + "]";
+    }
+    return target;
+  }
+
+  private static String stripZoneId(String s) {
+    int z = s.indexOf('%');
+    return z < 0 ? s : s.substring(0, z);
+  }
+
+  private static boolean isAllDigits(String s) {
+    if (s == null || s.isEmpty()) {
+      return false;
+    }
+    for (int i = 0; i < s.length(); i++) {
+      char c = s.charAt(i);
+      if (c < '0' || c > '9') {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private static boolean isIPv6Literal(String s) {
+    if (s == null || s.isEmpty() || s.indexOf(':') < 0) {
+      return false;
+    }
+    // Strict char-set screen so we never trigger a DNS lookup for an
+    // arbitrary string that happens to contain a colon.
+    for (int i = 0; i < s.length(); i++) {
+      char c = s.charAt(i);
+      if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')
+          || (c >= 'A' && c <= 'F') || c == ':' || c == '.')) {
+        return false;
+      }
+    }
+    try {
+      return InetAddress.getByName(s) instanceof Inet6Address;
+    } catch (UnknownHostException e) {
+      return false;
+    }
+  }
 
   private static URI createURI(String target,
                                boolean hasScheme,
@@ -448,11 +551,15 @@ public class NetUtils {
    */
   public static InetSocketAddress getConnectAddress(InetSocketAddress addr) {
     if (!addr.isUnresolved() && addr.getAddress().isAnyLocalAddress()) {
+      boolean v6Wildcard = addr.getAddress() instanceof Inet6Address;
       try {
         addr = new InetSocketAddress(InetAddress.getLocalHost(), addr.getPort());
       } catch (UnknownHostException uhe) {
-        // shouldn't get here unless the host doesn't have a loopback iface
-        addr = createSocketAddrForHost("127.0.0.1", addr.getPort());
+        // Shouldn't get here unless the host doesn't have a loopback iface.
+        // Fall back to the loopback that matches the family we were bound to:
+        // ::1 for an IPv6 wildcard, 127.0.0.1 otherwise.
+        addr = createSocketAddrForHost(
+            v6Wildcard ? "::1" : "127.0.0.1", addr.getPort());
       }
     }
     return addr;
@@ -760,17 +867,101 @@ public class NetUtils {
   }
 
   /**
-   * Compose a "host:port" string from the address.
+   * Format a host and port as a single authority string suitable for use in
+   * URLs, configuration values, and {@link InetSocketAddress} round-trips.
+   *
+   * For IPv6 literals the host is wrapped in brackets, e.g. {@code [::1]:8020}.
+   * Any zone/scope identifier (e.g. {@code fe80::1%eth0}) is stripped because
+   * scope IDs are not valid in URI authorities. IPv4 addresses and hostnames
+   * are returned as {@code host:port} unchanged.
+   *
+   * @param host an IPv4 literal, IPv6 literal (with or without brackets), or
+   *             hostname.
+   * @param port port number.
+   * @return bracketed-when-needed {@code host:port} string.
+   */
+  public static String formatHostPort(String host, int port) {
+    if (host == null) {
+      return "null:" + port;
+    }
+    // Detect already-bracketed input first; a zone-id may live inside the
+    // brackets (e.g. "[fe80::1%eth0]"), so strip it AFTER unwrapping
+    // rather than before, otherwise the endsWith("]") check fails and
+    // the result is double-bracketed.
+    String stripped = host;
+    if (stripped.startsWith("[") && stripped.endsWith("]")) {
+      stripped = stripped.substring(1, stripped.length() - 1);
+      int zoneIdx = stripped.indexOf('%');
+      if (zoneIdx >= 0) {
+        stripped = stripped.substring(0, zoneIdx);
+      }
+      return "[" + stripped + "]:" + port;
+    }
+    int zoneIdx = stripped.indexOf('%');
+    if (zoneIdx >= 0) {
+      stripped = stripped.substring(0, zoneIdx);
+    }
+    // A bare IPv6 literal contains at least two colons. IPv4 literals and
+    // hostnames contain at most one colon (and hostnames usually none).
+    if (stripped.indexOf(':') != stripped.lastIndexOf(':')) {
+      return "[" + stripped + "]:" + port;
+    }
+    return stripped + ":" + port;
+  }
+
+  /**
+   * Compose a host:port authority string from the address. Equivalent to
+   * {@link #formatHostPort(String, int)} applied to the address's numeric
+   * representation when resolved, falling back to the hostname when not.
+   *
+   * For an IPv6 address this emits the bracketed form, e.g. {@code [::1]:8020}.
    *
    * @param addr address.
-   * @return hort port string.
+   * @return host:port string.
+   */
+  public static String formatAddress(InetSocketAddress addr) {
+    if (addr == null) {
+      return null;
+    }
+    if (addr.isUnresolved() || addr.getAddress() == null) {
+      return formatHostPort(addr.getHostString(), addr.getPort());
+    }
+    InetAddress ia = addr.getAddress();
+    if (ia instanceof Inet6Address) {
+      // getHostAddress() on an Inet6Address may include a zone suffix
+      // (e.g. "fe80::1%eth0"); formatHostPort strips it.
+      return formatHostPort(ia.getHostAddress(), addr.getPort());
+    }
+    return ia.getHostAddress() + ":" + addr.getPort();
+  }
+
+  /**
+   * Compose a "host:port" string from the address.
+   *
+   * For IPv6 addresses the host is bracketed (e.g. {@code [::1]:8020}) so the
+   * result is a valid URI authority and round-trips through
+   * {@link #createSocketAddr(String)}.
+   *
+   * @param addr address.
+   * @return host port string.
    */
   public static String getHostPortString(InetSocketAddress addr) {
+    if (addr == null) {
+      return null;
+    }
+    // Preserve historical behavior of using getHostName() (which may reverse
+    // resolve or be a literal) for IPv4 / hostname cases; only switch to the
+    // numeric form for IPv6 where bracketing matters.
+    if (!addr.isUnresolved() && addr.getAddress() instanceof Inet6Address) {
+      return formatAddress(addr);
+    }
     return addr.getHostName() + ":" + addr.getPort();
   }
 
   /**
    * Get port as integer from host port string like host:port.
+   *
+   * IPv6 literals must be bracketed, e.g. {@code [::1]:8020}.
    *
    * @param addr host + port string like host:port.
    * @return an integer value representing the port.
@@ -778,12 +969,34 @@ public class NetUtils {
    */
   public static int getPortFromHostPortString(String addr)
       throws IllegalArgumentException {
-    String[] hostport = addr.split(":");
-    if (hostport.length != 2) {
-      String errorMsg = "Address should be <host>:<port>, but it is " + addr;
-      throw new IllegalArgumentException(errorMsg);
+    if (addr == null) {
+      throw new IllegalArgumentException(
+          "Address should be <host>:<port>, but it is null");
     }
-    return Integer.parseInt(hostport[1]);
+    int colonIdx;
+    if (addr.startsWith("[")) {
+      int rb = addr.indexOf(']');
+      if (rb < 0 || rb + 1 >= addr.length() || addr.charAt(rb + 1) != ':') {
+        throw new IllegalArgumentException(
+            "Address should be [<ipv6>]:<port>, but it is " + addr);
+      }
+      colonIdx = rb + 1;
+    } else {
+      // Bare IPv6 (multiple colons) is not a parseable host:port.
+      int firstColon = addr.indexOf(':');
+      int lastColon = addr.lastIndexOf(':');
+      if (firstColon != lastColon) {
+        throw new IllegalArgumentException(
+            "Address should be <host>:<port>, but it is " + addr
+                + " (bracket IPv6 literals as [::1]:port)");
+      }
+      colonIdx = firstColon;
+    }
+    if (colonIdx < 0 || colonIdx + 1 >= addr.length()) {
+      throw new IllegalArgumentException(
+          "Address should be <host>:<port>, but it is " + addr);
+    }
+    return Integer.parseInt(addr.substring(colonIdx + 1));
   }
   
   /**
