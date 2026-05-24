@@ -741,7 +741,11 @@ public class WebHdfsFileSystem extends FileSystem
         try {
           validateResponse(redirectOp, conn, false);
           url = new URL(conn.getHeaderField("Location"));
-          redirectHost = url.getHost() + ":" + url.getPort();
+          // Use getAuthority() rather than getHost()+":"+getPort() so that
+          // IPv6 literals keep their brackets, e.g. "[::1]:50075" instead of
+          // the mangled "::1:50075" that would confuse ExcludeDatanodesParam
+          // parsing on the NameNode side.
+          redirectHost = url.getAuthority();
         } finally {
           // TODO: consider not calling conn.disconnect() to allow connection reuse
           // See http://tinyurl.com/java7-http-keepalive

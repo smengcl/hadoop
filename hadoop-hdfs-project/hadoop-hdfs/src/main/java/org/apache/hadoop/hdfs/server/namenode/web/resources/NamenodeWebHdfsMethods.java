@@ -295,13 +295,35 @@ public class NamenodeWebHdfsMethods {
     if (excludeDatanodes != null) {
       for (String host : StringUtils
           .getTrimmedStringCollection(excludeDatanodes)) {
-        int idx = host.indexOf(':');
         Node excludeNode = null;
-        if (idx == -1) {
-          excludeNode = bm.getDatanodeManager().getDatanodeByHost(host);
+        // Support bracketed IPv6 literals "[addr]:port" as well as the
+        // plain "host:port" form used for IPv4 / hostnames.
+        if (host.startsWith("[")) {
+          int closeBracket = host.indexOf(']');
+          if (closeBracket > 0 && closeBracket + 1 < host.length()
+              && host.charAt(closeBracket + 1) == ':') {
+            String ipv6Addr = host.substring(1, closeBracket);
+            int port = Integer.parseInt(host.substring(closeBracket + 2));
+            excludeNode = bm.getDatanodeManager()
+                .getDatanodeByXferAddr(ipv6Addr, port);
+          } else if (closeBracket == host.length() - 1) {
+            // Bracketed IPv6 with no port — strip the brackets so
+            // getDatanodeByHost matches a hostname-style entry rather
+            // than the unparseable bracketed literal.
+            String ipv6Addr = host.substring(1, closeBracket);
+            excludeNode = bm.getDatanodeManager().getDatanodeByHost(ipv6Addr);
+          } else {
+            excludeNode = bm.getDatanodeManager().getDatanodeByHost(host);
+          }
         } else {
-          excludeNode = bm.getDatanodeManager().getDatanodeByXferAddr(
-            host.substring(0, idx), Integer.parseInt(host.substring(idx + 1)));
+          int idx = host.indexOf(':');
+          if (idx == -1) {
+            excludeNode = bm.getDatanodeManager().getDatanodeByHost(host);
+          } else {
+            excludeNode = bm.getDatanodeManager().getDatanodeByXferAddr(
+                host.substring(0, idx),
+                Integer.parseInt(host.substring(idx + 1)));
+          }
         }
 
         if (excludeNode != null) {
