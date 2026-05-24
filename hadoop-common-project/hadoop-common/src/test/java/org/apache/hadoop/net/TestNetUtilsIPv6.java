@@ -23,10 +23,13 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeFalse;
 
+import java.lang.reflect.Field;
 import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.apache.hadoop.test.GenericTestUtils;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -241,6 +244,50 @@ public class TestNetUtilsIPv6 {
     InetSocketAddress connect = NetUtils.getConnectAddress(wild);
     assertFalse(connect.getAddress().isAnyLocalAddress());
     assertEquals(8020, connect.getPort());
+  }
+
+  /**
+   * Verify that stripping a zone/scope identifier from an IPv6 address emits a
+   * WARN log entry exactly once per JVM, regardless of how many times zone-id
+   * bearing addresses are formatted.
+   *
+   * <p>The test resets the static {@code ZONE_ID_WARN_EMITTED} flag via
+   * reflection so it can run in isolation within the same JVM as other tests.
+   */
+  @Test
+  public void testZoneIdStrippedWarnsOnce() throws Exception {
+    // Reset the one-shot flag so this test is independent of execution order.
+    Field flag = NetUtils.class.getDeclaredField("ZONE_ID_WARN_EMITTED");
+    flag.setAccessible(true);
+    ((AtomicBoolean) flag.get(null)).set(false);
+
+    GenericTestUtils.LogCapturer logs =
+        GenericTestUtils.LogCapturer.captureLogs(
+            org.slf4j.LoggerFactory.getLogger(NetUtils.class));
+    try {
+      // Call formatHostPort three times with zone-id-bearing addresses.
+      NetUtils.formatHostPort("fe80::1%eth0", 8020);
+      NetUtils.formatHostPort("fe80::2%eth1", 9870);
+      NetUtils.formatHostPort("[fe80::3%eth0]", 50010);
+
+      String captured = logs.getOutput();
+
+      // The WARN must appear exactly once.
+      int firstIdx = captured.indexOf("zone/scope identifier stripped");
+      assertTrue(firstIdx >= 0,
+          "Expected zone-id WARN in log output but got: " + captured);
+
+      // No second occurrence beyond the first match.
+      int secondIdx = captured.indexOf("zone/scope identifier stripped",
+          firstIdx + 1);
+      assertEquals(-1, secondIdx,
+          "Zone-id WARN should be emitted once only, but found twice in: "
+              + captured);
+    } finally {
+      logs.stopCapturing();
+      // Restore the flag so subsequent tests are unaffected.
+      ((AtomicBoolean) flag.get(null)).set(false);
+    }
   }
 
   @Test

@@ -40,6 +40,7 @@ import java.nio.channels.SocketChannel;
 import java.nio.channels.UnresolvedAddressException;
 import java.util.Map.Entry;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -70,8 +71,15 @@ import org.slf4j.LoggerFactory;
 @InterfaceStability.Unstable
 public class NetUtils {
   private static final Logger LOG = LoggerFactory.getLogger(NetUtils.class);
-  
-  private static Map<String, String> hostToResolved = 
+
+  /**
+   * Guards the one-shot WARN emitted when a zone/scope identifier is stripped
+   * from an IPv6 address. Fires at most once per JVM to avoid log spam when
+   * many addresses are formatted in rapid succession.
+   */
+  private static final AtomicBoolean ZONE_ID_WARN_EMITTED = new AtomicBoolean(false);
+
+  private static Map<String, String> hostToResolved =
                                      new HashMap<String, String>();
   /** text to point users elsewhere: {@value} */
   private static final String FOR_MORE_DETAILS_SEE
@@ -334,7 +342,13 @@ public class NetUtils {
 
   private static String stripZoneId(String s) {
     int z = s.indexOf('%');
-    return z < 0 ? s : s.substring(0, z);
+    if (z < 0) {
+      return s;
+    }
+    // Centralised so all strip paths (formatHostPort,
+    // bracketUnbracketedIPv6, ...) share the warn-once guarantee.
+    warnZoneIdStrippedOnce(s);
+    return s.substring(0, z);
   }
 
   private static boolean isAllDigits(String s) {
@@ -894,12 +908,14 @@ public class NetUtils {
       stripped = stripped.substring(1, stripped.length() - 1);
       int zoneIdx = stripped.indexOf('%');
       if (zoneIdx >= 0) {
+        warnZoneIdStrippedOnce(host);
         stripped = stripped.substring(0, zoneIdx);
       }
       return "[" + stripped + "]:" + port;
     }
     int zoneIdx = stripped.indexOf('%');
     if (zoneIdx >= 0) {
+      warnZoneIdStrippedOnce(host);
       stripped = stripped.substring(0, zoneIdx);
     }
     // A bare IPv6 literal contains at least two colons. IPv4 literals and
@@ -908,6 +924,31 @@ public class NetUtils {
       return "[" + stripped + "]:" + port;
     }
     return stripped + ":" + port;
+  }
+
+  /**
+   * Emit a one-shot WARN when a zone/scope identifier is stripped from an IPv6
+   * address. The warning fires at most once per JVM lifetime so that log files
+   * are not flooded when many addresses share the same zone identifier.
+   *
+   * <p>Link-local addresses ({@code fe80::/10}) that carry a zone identifier
+   * (e.g. {@code fe80::1%eth0}) require that identifier to be routable, but
+   * zone identifiers are not permitted in URI authorities (RFC 3986). Hadoop
+   * therefore strips them, which means link-local addresses cannot be used as
+   * service endpoints. Use ULA ({@code fc00::/7}) or global unicast
+   * ({@code 2000::/3}) addresses instead.
+   *
+   * @param original the original host string before stripping.
+   */
+  private static void warnZoneIdStrippedOnce(String original) {
+    if (ZONE_ID_WARN_EMITTED.compareAndSet(false, true)) {
+      LOG.warn("IPv6 zone/scope identifier stripped from address '{}'. "
+          + "Zone identifiers are not valid in URI authorities (RFC 3986). "
+          + "Link-local addresses (fe80::/10) are not supported as Hadoop "
+          + "service endpoints; use ULA (fc00::/7) or global unicast "
+          + "(2000::/3) addresses. "
+          + "(This warning is emitted once per JVM.)", original);
+    }
   }
 
   /**

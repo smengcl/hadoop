@@ -260,10 +260,76 @@ coverage). Keep all workarounds from Phase 1 until the upstream fixes land.
 Known Caveats
 -------------
 
-**Link-local scope IDs are stripped.**
-`NetUtils` removes the scope identifier from addresses such as
-`fe80::1%eth0` before use. Use ULA or global unicast addresses for
-cluster communication. Tracked as HADOOP-XXXXX-F25 under
+### Scope identifiers / link-local addresses
+
+#### Why zone IDs are stripped
+
+An IPv6 *zone identifier* (also called a *scope ID*) is the `%`-suffixed
+interface name appended to a link-local address to make it routable, for
+example `fe80::1%eth0`.  Zone identifiers are **not permitted** inside a URI
+authority component: [RFC 3986 §3.2.2](https://www.rfc-editor.org/rfc/rfc3986)
+reserves `%` exclusively for percent-encoding, and any literal `%` in a URI
+authority is therefore a syntax error.
+
+Hadoop uses URI authorities pervasively — in HDFS block-location URLs,
+delegation-token service identifiers, RPC address round-trips through
+`createSocketAddr`, and configuration value serialisation.  To keep these
+paths well-formed, `NetUtils.formatHostPort` and `NetUtils.bracketUnbracketedIPv6`
+strip the zone identifier before composing the URI authority.  A one-shot
+`WARN` is emitted the first time a strip occurs (once per JVM):
+
+```
+WARN  NetUtils: IPv6 zone/scope identifier stripped from address 'fe80::1%eth0'.
+Zone identifiers are not valid in URI authorities (RFC 3986).
+Link-local addresses (fe80::/10) are not supported as Hadoop service endpoints;
+use ULA (fc00::/7) or global unicast (2000::/3) addresses.
+(This warning is emitted once per JVM.)
+```
+
+#### What this means in practice
+
+Because the zone identifier is stripped before the address is bound or
+advertised, **link-local addresses (`fe80::/10`) cannot be used as Hadoop
+service endpoints**.  A link-local address without its zone ID is
+unroutable at the IP layer — the kernel does not know which interface to
+use — so any connection attempt to the stripped address will fail.
+
+#### Supported address scopes
+
+| Address range | Scope | Supported |
+|:--------------|:------|:----------|
+| `fe80::/10`   | Link-local | **No** — requires zone ID, which is stripped |
+| `fc00::/7` (including `fd00::/8`) | Unique Local Address (ULA) | **Yes** |
+| `2000::/3`    | Global unicast | **Yes** |
+| `::`          | Unspecified / wildcard bind | **Yes** (bind only, not advertised) |
+
+The Docker Compose test harness in
+`hadoop-dist/src/main/compose/hadoop-ipv6` uses the ULA subnet
+`fd00:dead:beef::/64`, which is the recommended range for lab and
+production deployments that do not have globally routable IPv6 prefixes.
+
+#### Operational guidance
+
+If you see the zone-id WARN in your logs during startup, the address
+configured in `core-site.xml`, `hdfs-site.xml`, or `yarn-site.xml`
+contains a `%` character.  Replace it with a ULA or global unicast address
+that does not need a zone identifier.  Example:
+
+```xml
+<!-- Wrong: link-local address with zone identifier -->
+<property>
+  <name>dfs.namenode.rpc-bind-host</name>
+  <value>fe80::1%eth0</value>   <!-- will be silently stripped -->
+</property>
+
+<!-- Correct: ULA address, no zone identifier needed -->
+<property>
+  <name>dfs.namenode.rpc-bind-host</name>
+  <value>fd00:dead:beef::1</value>
+</property>
+```
+
+This limitation is tracked as HADOOP-XXXXX-F25 under
 [HADOOP-11890](https://issues.apache.org/jira/browse/HADOOP-11890).
 
 **BlockPoolID format.**
