@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+-->
+<configuration>
+  <property>
+    <name>dfs.replication</name>
+    <value>2</value>
+  </property>
+
+  <property>
+    <name>dfs.namenode.name.dir</name>
+    <value>/data/dfs/name</value>
+  </property>
+  <property>
+    <name>dfs.datanode.data.dir</name>
+    <value>/data/dfs/data</value>
+  </property>
+
+  <!-- Bind on the IPv4 wildcard so all services are reachable on 0.0.0.0. -->
+  <property>
+    <name>dfs.namenode.rpc-bind-host</name>
+    <value>0.0.0.0</value>
+  </property>
+  <property>
+    <name>dfs.namenode.servicerpc-bind-host</name>
+    <value>0.0.0.0</value>
+  </property>
+  <property>
+    <name>dfs.namenode.http-bind-host</name>
+    <value>0.0.0.0</value>
+  </property>
+  <property>
+    <name>dfs.namenode.rpc-address</name>
+    <value>namenode:8020</value>
+  </property>
+  <property>
+    <name>dfs.namenode.http-address</name>
+    <value>namenode:9870</value>
+  </property>
+
+  <!-- DataNodes bind on 0.0.0.0; xferAddr advertised to the NN will be
+       a plain dotted-decimal IPv4 address. -->
+  <property>
+    <name>dfs.datanode.address</name>
+    <value>0.0.0.0:9866</value>
+  </property>
+  <property>
+    <name>dfs.datanode.http.address</name>
+    <value>0.0.0.0:9864</value>
+  </property>
+  <property>
+    <name>dfs.datanode.ipc.address</name>
+    <value>0.0.0.0:9867</value>
+  </property>
+
+  <!-- dfs.client.use.datanode.hostname and
+       dfs.datanode.use.datanode.hostname are intentionally NOT set here.
+       The IPv6 harness enables hostname mode as a workaround for bracketed
+       IPv6 address handling; on IPv4 the default (IP-direct) is correct
+       and exercises the numeric-address connect path directly. -->
+
+  <!-- dfs.namenode.datanode.registration.ip-hostname-check is intentionally
+       NOT set here (default true).  The IPv6 harness disables it because the
+       DN's reported IP is a numeric IPv6 literal that fails reverse-lookup;
+       plain IPv4 addresses resolve fine under the default. -->
+
+  <property>
+    <name>dfs.permissions.enabled</name>
+    <value>false</value>
+  </property>
+</configuration>

@@ -1,0 +1,114 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# IPv4-only Hadoop verification harness. Guards against IPv6 fixes
+# accidentally regressing standard IPv4 behaviour.
+#
+# Network: a plain IPv4 bridge (no enable_ipv6, no v6 subnet).
+# Static addresses on 172.31.99.0/24 (chosen to avoid Docker's default
+# 172.17/16 and 172.18/16 ranges). Hadoop services bind on 0.0.0.0
+# and address each other via service hostnames; Docker DNS returns A records.
+#
+# Build prerequisite (run from the repo root):
+#     mvn -DskipTests -Pdist package
+# That produces hadoop-dist/target/hadoop-3.6.0-SNAPSHOT/. Then:
+#     cd hadoop-dist/src/main/compose/hadoop-ipv4
+#     cp -r ../../../target/hadoop-3.6.0-SNAPSHOT .
+#     docker compose build
+#     docker compose up -d
+#     docker compose exec namenode /opt/hadoop/smoketest.sh
+#
+# (Or use the build-arg form documented in README.md.)
+
+services:
+  namenode:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: hadoop-ipv4:dev
+    hostname: namenode
+    command: ["hdfs", "namenode"]
+    ports:
+      - "9870:9870"
+      - "8020:8020"
+    networks:
+      v4net:
+        ipv4_address: 172.31.99.10
+    volumes:
+      - nn-data:/data/dfs/name
+
+  datanode-1:
+    image: hadoop-ipv4:dev
+    hostname: datanode-1
+    command: ["hdfs", "datanode"]
+    depends_on:
+      - namenode
+    networks:
+      v4net:
+        ipv4_address: 172.31.99.21
+    volumes:
+      - dn1-data:/data/dfs/data
+
+  datanode-2:
+    image: hadoop-ipv4:dev
+    hostname: datanode-2
+    command: ["hdfs", "datanode"]
+    depends_on:
+      - namenode
+    networks:
+      v4net:
+        ipv4_address: 172.31.99.22
+    volumes:
+      - dn2-data:/data/dfs/data
+
+  resourcemanager:
+    image: hadoop-ipv4:dev
+    hostname: resourcemanager
+    command: ["yarn", "resourcemanager"]
+    depends_on:
+      - namenode
+    ports:
+      - "8088:8088"
+    networks:
+      v4net:
+        ipv4_address: 172.31.99.30
+
+  nodemanager-1:
+    image: hadoop-ipv4:dev
+    hostname: nodemanager-1
+    command: ["yarn", "nodemanager"]
+    depends_on:
+      - resourcemanager
+    networks:
+      v4net:
+        ipv4_address: 172.31.99.41
+
+  historyserver:
+    image: hadoop-ipv4:dev
+    hostname: historyserver
+    command: ["mapred", "historyserver"]
+    depends_on:
+      - namenode
+    ports:
+      - "19888:19888"
+    networks:
+      v4net:
+        ipv4_address: 172.31.99.50
+
+networks:
+  v4net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.31.99.0/24
+
+volumes:
+  nn-data:
+  dn1-data:
+  dn2-data:
