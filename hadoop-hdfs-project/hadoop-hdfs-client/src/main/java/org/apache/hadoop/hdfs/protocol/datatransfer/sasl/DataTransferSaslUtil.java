@@ -157,18 +157,36 @@ public final class DataTransferSaslUtil {
   }
 
   /**
-   * Returns InetAddress from peer.  The getRemoteAddressString has the form
-   * [host][/ip-address]:port.  The host may be missing.  The IP address (and
-   * preceding '/') may be missing.  The port preceded by ':' is always present.
+   * Returns InetAddress from peer. The getRemoteAddressString has the form
+   * {@code [host][/ip-address]:port}. The host may be missing. The IP address
+   * (and preceding '/') may be missing. The port preceded by ':' is always
+   * present. The IP may be a bracketed IPv6 literal ({@code [::1]}) or an
+   * unbracketed numeric form (e.g. {@code /0:0:0:0:0:0:0:1}).
    *
    * @return InetAddress from peer
    */
   public static InetAddress getPeerAddress(Peer peer) {
-    String remoteAddr = peer.getRemoteAddressString().split(":")[0];
-    int slashIdx = remoteAddr.indexOf('/');
-    return InetAddresses.forString(slashIdx != -1 ?
-        remoteAddr.substring(slashIdx + 1, remoteAddr.length()) :
-        remoteAddr);
+    String full = peer.getRemoteAddressString();
+    // Strip the trailing ":port". For "[ipv6]:port" the port follows
+    // "]:"; for "host/ip:port" or plain "ip:port" the port is after the
+    // last colon. Splitting on ":" only works for IPv4.
+    int lastColon;
+    int rb = full.lastIndexOf(']');
+    if (rb >= 0) {
+      lastColon = full.indexOf(':', rb);
+    } else {
+      lastColon = full.lastIndexOf(':');
+    }
+    String hostAndIp = lastColon > 0 ? full.substring(0, lastColon) : full;
+    int slashIdx = hostAndIp.indexOf('/');
+    String ipPart = slashIdx != -1
+        ? hostAndIp.substring(slashIdx + 1)
+        : hostAndIp;
+    // Guava's InetAddresses.forString does not accept brackets.
+    if (ipPart.startsWith("[") && ipPart.endsWith("]")) {
+      ipPart = ipPart.substring(1, ipPart.length() - 1);
+    }
+    return InetAddresses.forString(ipPart);
   }
 
   /**
