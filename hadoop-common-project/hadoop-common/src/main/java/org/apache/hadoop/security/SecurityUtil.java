@@ -504,20 +504,33 @@ public final class SecurityUtil {
    * @param addr InetSocketAddress of remote connection with a token
    * @return "ip:port" or "host:port" depending on the value of
    *          hadoop.security.token.service.use_ip
+   *
+   * <p>When useIpForTokenService is true and the address is an IPv6
+   * address, the IP is bracketed so the result is a valid URI authority
+   * (e.g. {@code [::1]:8020}).  This is required so that downstream
+   * callers that pass the service string to {@link URI#create} or split
+   * on ':' do not fail or misparse.
    */
   public static Text buildTokenService(InetSocketAddress addr) {
-    String host = null;
+    String serviceStr;
     if (useIpForTokenService) {
       if (addr.isUnresolved()) { // host has no ip address
         throw new IllegalArgumentException(
             new UnknownHostException(addr.getHostName())
         );
       }
-      host = addr.getAddress().getHostAddress();
+      // NetUtils.formatHostPort brackets IPv6 literals and returns
+      // "ip:port" for IPv4/hostname, giving a URI-safe authority.
+      serviceStr = NetUtils.formatHostPort(
+          addr.getAddress().getHostAddress(), addr.getPort());
     } else {
-      host = StringUtils.toLowerCase(addr.getHostName());
+      // The hostname path can also carry a bare IPv6 literal in the
+      // rare case where dfs.datanode.hostname is configured to a v6
+      // IP; route through formatHostPort so it brackets safely.
+      serviceStr = NetUtils.formatHostPort(
+          StringUtils.toLowerCase(addr.getHostName()), addr.getPort());
     }
-    return new Text(host + ":" + addr.getPort());
+    return new Text(serviceStr);
   }
 
   /**
