@@ -89,11 +89,14 @@ export LANG=en_US.UTF-8
 # Kerberos security.
 # export HADOOP_JAAS_DEBUG=true
 
-# Extra Java runtime options for all Hadoop commands. We don't support
-# IPv6 yet/still, so by default the preference is set to IPv4.
+# Extra Java runtime options for all Hadoop commands. By default Hadoop runs
+# the JVM in dual-stack mode and binds IPv6 connectors when configured. To
+# force IPv4-only, uncomment the line below.
 # export HADOOP_OPTS="-Djava.net.preferIPv4Stack=true"
+# To prefer IPv6 when both stacks are available, set:
+# export HADOOP_OPTS="-Djava.net.preferIPv4Stack=false -Djava.net.preferIPv6Addresses=true"
 # For Kerberos debugging, an extended option set logs more information
-# export HADOOP_OPTS="-Djava.net.preferIPv4Stack=true -Dsun.security.krb5.debug=true -Dsun.security.spnego.debug"
+# export HADOOP_OPTS="-Dsun.security.krb5.debug=true -Dsun.security.spnego.debug"
 
 # Some parts of the shell code may do special things dependent upon
 # the operating system.  We have to set this here. See the next

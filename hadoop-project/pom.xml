@@ -2845,6 +2845,37 @@
         </plugins>
       </build>
     </profile>
+    <!--
+      ipv6-test: opt-in profile for tests that exercise IPv6 paths. The
+      default surefire configuration sets java.net.preferIPv4Stack=true,
+      which masks Inet6Address resolution and makes IPv6-targeted tests
+      meaningless. Activating this profile flips the JVM to dual-stack
+      with an IPv6 preference so tests like TestNetUtilsIPv6,
+      TestDatanodeIDIPv6, TestDNSReverseIPv6, and TestMiniDFSClusterIPv6
+      can run.
+
+      Usage:  mvn -P ipv6-test -Dtest='TestNetUtilsIPv6,...' test
+    -->
+    <profile>
+      <id>ipv6-test</id>
+      <activation>
+        <activeByDefault>false</activeByDefault>
+      </activation>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-surefire-plugin</artifactId>
+            <configuration>
+              <systemPropertyVariables>
+                <java.net.preferIPv4Stack>false</java.net.preferIPv4Stack>
+                <java.net.preferIPv6Addresses>true</java.net.preferIPv6Addresses>
+              </systemPropertyVariables>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
   </profiles>
 
   <repositories>
