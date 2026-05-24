@@ -1037,7 +1037,20 @@ public class NNStorage extends Storage implements Closeable,
       LOG.warn("Could not find ip address of \"default\" inteface.");
       throw e;
     }
-    
+
+    // The block-pool id is embedded in many filesystem paths (e.g. block
+    // pool storage directories and the .crc sidecar files written by
+    // ChecksumFileSystem). Java URI parsing rejects colons inside path
+    // segments, so flatten an IPv6 IP into a colon-free form here.
+    // Scope identifiers (%) are also stripped for the same reason.
+    if (ip.indexOf(':') >= 0 || ip.indexOf('%') >= 0) {
+      ip = ip.replace(':', '_');
+      int pct = ip.indexOf('%');
+      if (pct >= 0) {
+        ip = ip.substring(0, pct);
+      }
+    }
+
     int rand = DFSUtil.getSecureRandom().nextInt(Integer.MAX_VALUE);
     return "BP-" + rand + "-"+ ip + "-" + Time.now();
   }

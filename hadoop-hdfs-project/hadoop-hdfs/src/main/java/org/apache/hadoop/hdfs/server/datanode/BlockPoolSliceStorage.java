@@ -81,10 +81,15 @@ public class BlockPoolSliceStorage extends Storage {
    */
   static final String ROLLING_UPGRADE_MARKER_FILE = "RollingUpgradeInProgress";
 
+  // The IP segment of a BP id is either an IPv4 dotted-quad (legacy form)
+  // or an IPv6 address with ":" flattened to "_" by NNStorage.newBlockPoolID
+  // (HADOOP-XXXXX-7). Matching only the IPv4 form here would silently
+  // disable trash and break getDataNodeStorageRoot on IPv6 clusters
+  // because every consumer of these patterns falls through with no match.
   private static final String BLOCK_POOL_ID_PATTERN_BASE =
       Pattern.quote(File.separator) +
-      "BP-\\d+-\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}-\\d+" +
-      Pattern.quote(File.separator);
+      "BP-\\d+-(?:\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|[0-9a-fA-F_]+)-\\d+"
+      + Pattern.quote(File.separator);
 
   private static final Pattern BLOCK_POOL_PATH_PATTERN = Pattern.compile(
       "^(.*)(" + BLOCK_POOL_ID_PATTERN_BASE + ")(.*)$");
