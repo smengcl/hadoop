@@ -21,6 +21,7 @@ package org.apache.hadoop.hdfs.protocol;
 import org.apache.hadoop.thirdparty.protobuf.ByteString;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
+import org.apache.hadoop.net.NetUtils;
 
 import org.apache.hadoop.classification.VisibleForTesting;
 
@@ -135,7 +136,10 @@ public class DatanodeID implements Comparable<DatanodeID> {
     this.ipAddr = ipAddr;
     this.ipAddrBytes = ipAddrBytes;
     this.xferPort = xferPort;
-    this.xferAddr = ipAddr + ":" + xferPort;
+    // IPv6 literals must be bracketed so the cached xferAddr round-trips
+    // through NetUtils.createSocketAddr; HADOOP-17543 was caused by the
+    // unbracketed form here.
+    this.xferAddr = NetUtils.formatHostPort(ipAddr, xferPort);
   }
 
   public void setPeerHostName(String peerHostName) {
@@ -201,35 +205,35 @@ public class DatanodeID implements Comparable<DatanodeID> {
    * @return IP:ipcPort string
    */
   private String getIpcAddr() {
-    return ipAddr + ":" + ipcPort;
+    return NetUtils.formatHostPort(ipAddr, ipcPort);
   }
 
   /**
    * @return IP:infoPort string
    */
   public String getInfoAddr() {
-    return ipAddr + ":" + infoPort;
+    return NetUtils.formatHostPort(ipAddr, infoPort);
   }
 
   /**
    * @return IP:infoPort string
    */
   public String getInfoSecureAddr() {
-    return ipAddr + ":" + infoSecurePort;
+    return NetUtils.formatHostPort(ipAddr, infoSecurePort);
   }
 
   /**
    * @return hostname:xferPort
    */
   public String getXferAddrWithHostname() {
-    return hostName + ":" + xferPort;
+    return NetUtils.formatHostPort(hostName, xferPort);
   }
 
   /**
    * @return hostname:ipcPort
    */
   private String getIpcAddrWithHostname() {
-    return hostName + ":" + ipcPort;
+    return NetUtils.formatHostPort(hostName, ipcPort);
   }
 
   /**
