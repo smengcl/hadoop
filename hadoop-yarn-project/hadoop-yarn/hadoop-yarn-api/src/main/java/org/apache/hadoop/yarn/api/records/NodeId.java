@@ -116,17 +116,33 @@ public abstract class NodeId implements Comparable<NodeId> {
   @Public
   @Stable
   public static NodeId fromString(String nodeIdStr) {
-    String[] parts = nodeIdStr.split(":");
-    if (parts.length != 2) {
+    // Bracket-aware host:port split. An IPv6 host appears in the
+    // "[ipv6]:port" form; the port separator is the colon immediately
+    // after "]". For plain "host:port" or "ipv4:port" we fall back to
+    // the last colon. Naïve split(":") would shred any IPv6 input.
+    String hostPart;
+    String portPart;
+    int rb = nodeIdStr.lastIndexOf(']');
+    int colon = rb >= 0
+        ? nodeIdStr.indexOf(':', rb)
+        : nodeIdStr.lastIndexOf(':');
+    if (colon < 0 || colon == nodeIdStr.length() - 1) {
       throw new IllegalArgumentException("Invalid NodeId [" + nodeIdStr
           + "]. Expected host:port");
     }
+    hostPart = nodeIdStr.substring(0, colon).trim();
+    portPart = nodeIdStr.substring(colon + 1);
+    // Strip the surrounding brackets from a "[ipv6]" host so the
+    // stored host string is the bare literal.
+    if (hostPart.length() > 1
+        && hostPart.charAt(0) == '['
+        && hostPart.charAt(hostPart.length() - 1) == ']') {
+      hostPart = hostPart.substring(1, hostPart.length() - 1);
+    }
     try {
-      NodeId nodeId =
-          NodeId.newInstance(parts[0].trim(), Integer.parseInt(parts[1]));
-      return nodeId;
+      return NodeId.newInstance(hostPart, Integer.parseInt(portPart));
     } catch (NumberFormatException e) {
-      throw new IllegalArgumentException("Invalid port: " + parts[1], e);
+      throw new IllegalArgumentException("Invalid port: " + portPart, e);
     }
   }
 

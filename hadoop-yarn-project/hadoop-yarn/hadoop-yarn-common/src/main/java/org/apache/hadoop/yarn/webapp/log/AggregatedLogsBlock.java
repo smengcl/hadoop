@@ -139,7 +139,8 @@ public class AggregatedLogsBlock extends HtmlBlock {
       nodeId = NodeId.fromString(nodeId).getHost() + ":" + httpPort;
     }
 
-    sb.append(scheme).append(nodeId).append("/node/application/").append(appId);
+    sb.append(scheme).append(WebAppUtils.encodeHostPortForPathSegment(nodeId))
+        .append("/node/application/").append(appId);
     return sb.toString();
   }
 }

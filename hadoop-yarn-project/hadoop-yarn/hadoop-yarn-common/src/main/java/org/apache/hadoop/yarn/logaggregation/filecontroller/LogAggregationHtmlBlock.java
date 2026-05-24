@@ -39,6 +39,7 @@ import org.apache.hadoop.yarn.api.records.NodeId;
 import org.apache.hadoop.yarn.logaggregation.LogAggregationWebUtils;
 import org.apache.hadoop.yarn.server.security.ApplicationACLsManager;
 import org.apache.hadoop.yarn.webapp.hamlet2.Hamlet;
+import org.apache.hadoop.yarn.webapp.util.WebAppUtils;
 import org.apache.hadoop.yarn.webapp.view.HtmlBlock;
 
 /**
@@ -163,8 +164,9 @@ public abstract class LogAggregationHtmlBlock extends HtmlBlock {
     long toRead = end - start;
     if (toRead < logLength) {
       html.p().__("Showing " + toRead + " bytes of " + logLength
-          + " total. Click ").a(url("logs", $(NM_NODENAME), $(CONTAINER_ID),
-          $(ENTITY_STRING), $(APP_OWNER),
+          + " total. Click ").a(url("logs",
+          WebAppUtils.encodeHostPortForPathSegment($(NM_NODENAME)),
+          $(CONTAINER_ID), $(ENTITY_STRING), $(APP_OWNER),
           logType, "?start=0&start.time=" + startTime
               + "&end.time=" + endTime), "here").
           __(" for the full log.").__();

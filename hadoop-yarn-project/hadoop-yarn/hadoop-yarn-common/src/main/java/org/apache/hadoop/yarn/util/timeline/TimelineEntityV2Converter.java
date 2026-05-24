@@ -50,6 +50,7 @@ import java.util.NavigableSet;
 import java.util.Set;
 
 import static org.apache.hadoop.yarn.util.StringHelper.PATH_JOINER;
+import org.apache.hadoop.yarn.webapp.util.WebAppUtils;
 
 /**
  * Utility class to generate reports from timeline entities.
@@ -149,7 +150,9 @@ public final class TimelineEntityV2Converter {
       allocatedNode = NodeId.newInstance(allocatedHost, allocatedPort);
       if (serverAddress != null && user != null) {
         logUrl = PATH_JOINER.join(serverAddress,
-            "logs", allocatedNode, containerId, containerId, user);
+            "logs",
+            WebAppUtils.encodeHostPortForPathSegment(allocatedNode.toString()),
+            containerId, containerId, user);
       }
     }
     ContainerReport container = ContainerReport.newInstance(

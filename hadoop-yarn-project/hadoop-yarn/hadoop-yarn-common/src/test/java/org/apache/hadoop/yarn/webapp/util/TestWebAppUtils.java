@@ -201,6 +201,132 @@ public class TestWebAppUtils {
     }
   }
 
+  // -----------------------------------------------------------------
+  // HADOOP-XXXXX-F13: IPv6 host:port path-segment encoding
+  // -----------------------------------------------------------------
+
+  @Test
+  void testEncodeHostPortForPathSegment_ipv4_unchanged() {
+    // IPv4 host:port must pass through verbatim
+    assertEquals("1.2.3.4:9866",
+        WebAppUtils.encodeHostPortForPathSegment("1.2.3.4:9866"));
+  }
+
+  @Test
+  void testEncodeHostPortForPathSegment_hostname_unchanged() {
+    assertEquals("nodemanager.example.com:8042",
+        WebAppUtils.encodeHostPortForPathSegment(
+            "nodemanager.example.com:8042"));
+  }
+
+  @Test
+  void testEncodeHostPortForPathSegment_alreadyBracketed_unchanged() {
+    // Pre-bracketed form must not be double-bracketed
+    assertEquals("[fd00::1]:9866",
+        WebAppUtils.encodeHostPortForPathSegment("[fd00::1]:9866"));
+  }
+
+  @Test
+  void testEncodeHostPortForPathSegment_bareIPv6WithPort() {
+    // Bare IPv6 literal with port → bracket the host
+    assertEquals("[fd00::21]:9866",
+        WebAppUtils.encodeHostPortForPathSegment("fd00::21:9866"));
+  }
+
+  @Test
+  void testEncodeHostPortForPathSegment_bareIPv6NoPort() {
+    // Bare IPv6 without port → bracket the whole thing
+    assertEquals("[fd00::1]",
+        WebAppUtils.encodeHostPortForPathSegment("fd00::1"));
+  }
+
+  @Test
+  void testEncodeHostPortForPathSegment_null() {
+    assertNull(WebAppUtils.encodeHostPortForPathSegment(null));
+  }
+
+  @Test
+  void testEncodeHostPortForPathSegment_empty() {
+    assertEquals("",
+        WebAppUtils.encodeHostPortForPathSegment(""));
+  }
+
+  @Test
+  void testGetRunningLogURL_ipv4() {
+    // IPv4 must be identical to the pre-fix behaviour
+    String url = WebAppUtils.getRunningLogURL(
+        "1.2.3.4:9866", "container_1_0001_01_000001", "user1");
+    assertEquals(
+        "1.2.3.4:9866/node/containerlogs/container_1_0001_01_000001/user1",
+        url);
+  }
+
+  @Test
+  void testGetRunningLogURL_bracketedIPv6() {
+    // Already-bracketed IPv6 must be preserved unchanged
+    String url = WebAppUtils.getRunningLogURL(
+        "[fd00::1]:9866", "container_1_0001_01_000001", "user1");
+    assertEquals(
+        "[fd00::1]:9866/node/containerlogs/container_1_0001_01_000001/user1",
+        url);
+  }
+
+  @Test
+  void testGetRunningLogURL_bareIPv6() {
+    // Bare (unbracketed) IPv6 host:port must be emitted with brackets
+    String url = WebAppUtils.getRunningLogURL(
+        "fd00::1:9866", "container_1_0001_01_000001", "user1");
+    assertEquals(
+        "[fd00::1]:9866/node/containerlogs/container_1_0001_01_000001/user1",
+        url);
+  }
+
+  @Test
+  void testGetAggregatedLogURL_ipv4() {
+    String url = WebAppUtils.getAggregatedLogURL(
+        "http://ats.example.com:8188",
+        "1.2.3.4:9866",
+        "container_1_0001_01_000001",
+        "container_1_0001_01_000001",
+        "user1");
+    assertEquals(
+        "http://ats.example.com:8188/applicationhistory/logs/"
+            + "1.2.3.4:9866/container_1_0001_01_000001/"
+            + "container_1_0001_01_000001/user1",
+        url);
+  }
+
+  @Test
+  void testGetAggregatedLogURL_bracketedIPv6() {
+    String url = WebAppUtils.getAggregatedLogURL(
+        "http://ats.example.com:8188",
+        "[fd00::1]:9866",
+        "container_1_0001_01_000001",
+        "container_1_0001_01_000001",
+        "user1");
+    assertEquals(
+        "http://ats.example.com:8188/applicationhistory/logs/"
+            + "[fd00::1]:9866/container_1_0001_01_000001/"
+            + "container_1_0001_01_000001/user1",
+        url);
+  }
+
+  @Test
+  void testGetAggregatedLogURL_bareIPv6() {
+    // Bare IPv6 allocatedNode must be bracketed in the emitted URL
+    String url = WebAppUtils.getAggregatedLogURL(
+        "http://ats.example.com:8188",
+        "fd00::21:9866",
+        "container_1_0001_01_000001",
+        "container_1_0001_01_000001",
+        "user1");
+    assertEquals(
+        "http://ats.example.com:8188/applicationhistory/logs/"
+            + "[fd00::21]:9866/container_1_0001_01_000001/"
+            + "container_1_0001_01_000001/user1",
+        url);
+  }
+
   @Test
   void testGetHtmlEscapedURIWithQueryString() throws Exception {
     HttpServletRequest request = Mockito.mock(HttpServletRequest.class);

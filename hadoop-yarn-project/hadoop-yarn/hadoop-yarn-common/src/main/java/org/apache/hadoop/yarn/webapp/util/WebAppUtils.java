@@ -462,7 +462,8 @@ public class WebAppUtils {
       return null;
     }
     return PATH_JOINER.join(
-        nodeHttpAddress, "node", "containerlogs", containerId, user);
+        encodeHostPortForPathSegment(nodeHttpAddress),
+        "node", "containerlogs", containerId, user);
   }
 
   public static String getAggregatedLogURL(String serverHttpAddress,
@@ -475,7 +476,53 @@ public class WebAppUtils {
       return null;
     }
     return PATH_JOINER.join(serverHttpAddress, "applicationhistory", "logs",
-        allocatedNode, containerId, entity, user);
+        encodeHostPortForPathSegment(allocatedNode),
+        containerId, entity, user);
+  }
+
+  /**
+   * Encode a {@code host:port} authority string so that it is safe to embed
+   * as a single URL path segment.
+   *
+   * <p>When {@code hostPort} contains a bare IPv6 literal (e.g.
+   * {@code fd00::21:9866}) the colons in the address cause Jetty's path
+   * matcher to mis-parse the segment boundary.  This method brackets the
+   * IPv6 host ({@code [fd00::21]:9866}) so the colon that separates host
+   * from port is the only structural colon visible to the router.
+   *
+   * <p>Inputs that are already bracketed, or that contain only one colon
+   * (IPv4 or hostname), are returned unchanged.
+   *
+   * @param hostPort a {@code host:port} string, possibly with a bare IPv6
+   *                 literal as the host.
+   * @return the input with the IPv6 host bracketed if necessary.
+   */
+  public static String encodeHostPortForPathSegment(String hostPort) {
+    if (hostPort == null || hostPort.isEmpty() || hostPort.charAt(0) == '[') {
+      // null, empty, or already bracketed – nothing to do
+      return hostPort;
+    }
+    int firstColon = hostPort.indexOf(':');
+    int lastColon  = hostPort.lastIndexOf(':');
+    if (firstColon == lastColon) {
+      // Zero or one colon → IPv4 literal or hostname[:port]; no IPv6 possible.
+      return hostPort;
+    }
+    // Two or more colons.  Try to interpret the last colon as the host/port
+    // separator: if the trailing portion is all digits and the leading
+    // portion already contains two or more colons it must be an IPv6 literal
+    // with an appended port number.
+    String hostCandidate = hostPort.substring(0, lastColon);
+    String portCandidate = hostPort.substring(lastColon + 1);
+    if (!portCandidate.isEmpty() && portCandidate.chars().allMatch(Character::isDigit)
+        && hostCandidate.indexOf(':') != hostCandidate.lastIndexOf(':')) {
+      // bare IPv6 literal with port → bracket the host
+      return "[" + hostCandidate + "]:" + portCandidate;
+    }
+    // No trailing port but the whole value looks like a bare IPv6 address
+    // (two or more colons, no digits-only suffix after the last colon).
+    // Bracket the whole thing so it round-trips through URI parsing.
+    return "[" + hostPort + "]";
   }
 
   /**
