@@ -360,15 +360,29 @@ public class WebAppUtils {
       String webAppURLWithoutScheme) {
 
     // If the bind-host setting exists then it overrides the hostname
-    // portion of the corresponding webAppURLWithoutScheme
+    // portion of the corresponding webAppURLWithoutScheme.
     String host = conf.getTrimmed(hostProperty);
     if (host != null && !host.isEmpty()) {
-      if (webAppURLWithoutScheme.contains(":")) {
-        webAppURLWithoutScheme = host + ":" + webAppURLWithoutScheme.split(":")[1];
+      // Extract the port from webAppURLWithoutScheme in a bracket-aware way:
+      // it may already be "[ipv6]:port" (then port follows the last "]:"),
+      // or plain "host:port".
+      String port;
+      int rb = webAppURLWithoutScheme.lastIndexOf(']');
+      int colon = rb >= 0 ? webAppURLWithoutScheme.indexOf(':', rb)
+          : webAppURLWithoutScheme.lastIndexOf(':');
+      if (colon < 0 || colon == webAppURLWithoutScheme.length() - 1) {
+        throw new YarnRuntimeException(
+            "webAppURLWithoutScheme must include port specification but doesn't: "
+                + webAppURLWithoutScheme);
       }
-      else {
-        throw new YarnRuntimeException("webAppURLWithoutScheme must include port specification but doesn't: " +
-                                       webAppURLWithoutScheme);
+      port = webAppURLWithoutScheme.substring(colon + 1);
+      // Re-emit bracketed when host is an IPv6 literal (contains ':')
+      // and not already bracketed; bare IPv6 + ':' + port produces an
+      // ambiguous authority that HttpServer2 / URI parsing rejects.
+      if (host.indexOf(':') >= 0 && !host.startsWith("[")) {
+        webAppURLWithoutScheme = "[" + host + "]:" + port;
+      } else {
+        webAppURLWithoutScheme = host + ":" + port;
       }
     }
 

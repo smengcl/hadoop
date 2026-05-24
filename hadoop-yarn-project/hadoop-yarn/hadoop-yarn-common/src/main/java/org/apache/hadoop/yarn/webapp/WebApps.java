@@ -120,10 +120,25 @@ public class WebApps {
     }
 
     public Builder<T> at(String bindAddress) {
-      String[] parts = StringUtils.split(bindAddress, ':');
-      if (parts.length == 2) {
-        int port = Integer.parseInt(parts[1]);
-        return at(parts[0], port, port == 0);
+      // Split bracket-aware: a "[ipv6]:port" form contains many ":"
+      // characters; only the one immediately after "]" is the port
+      // separator.
+      int rb = bindAddress.lastIndexOf(']');
+      int colon = rb >= 0 ? bindAddress.indexOf(':', rb)
+          : bindAddress.lastIndexOf(':');
+      // Also reject host-only inputs that happen to contain a colon
+      // (bare IPv6 literal): if there are multiple colons but no
+      // brackets, do not attempt to peel a port.
+      boolean bareIpv6 = rb < 0
+          && bindAddress.indexOf(':') != bindAddress.lastIndexOf(':');
+      if (colon > 0 && !bareIpv6) {
+        String host = bindAddress.substring(0, colon);
+        // Strip brackets here; the URL builder re-adds them when needed.
+        if (host.startsWith("[") && host.endsWith("]")) {
+          host = host.substring(1, host.length() - 1);
+        }
+        int port = Integer.parseInt(bindAddress.substring(colon + 1));
+        return at(host, port, port == 0);
       }
       return at(bindAddress, 0, true);
     }
@@ -355,7 +370,14 @@ public class WebApps {
           startPort = ranges.getRangeStart();
           builder.setPortRanges(ranges);
         }
-        builder.addEndpoint(URI.create(httpScheme + bindAddress +
+        // bindAddress is the host alone after Builder.at() parsing.
+        // Bracket IPv6 literals so the URL is a valid authority.
+        String urlHost = bindAddress;
+        if (urlHost != null && urlHost.indexOf(':') >= 0
+            && !urlHost.startsWith("[")) {
+          urlHost = "[" + urlHost + "]";
+        }
+        builder.addEndpoint(URI.create(httpScheme + urlHost +
             ":" + startPort));
         boolean hasSpnegoConf = spnegoPrincipalKey != null
             && conf.get(spnegoPrincipalKey) != null && spnegoKeytabKey != null
