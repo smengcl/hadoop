@@ -274,34 +274,53 @@
         return res;
       }
 
+      // Split a "host:port" or "[ipv6]:port" string into {host, port}. The
+      // host of an IPv6 form is returned without surrounding brackets;
+      // the caller re-wraps it for URL construction. Mirrors the helper
+      // in hdfs/dfshealth.js (HADOOP-18209).
+      function splitHostPort(s) {
+        if (!s) {
+          return { host: "", port: "" };
+        }
+        if (s.charAt(0) === "[") {
+          var rb = s.indexOf("]");
+          if (rb > 0) {
+            var rest = s.substring(rb + 1);
+            var p = rest.charAt(0) === ":" ? rest.substring(1) : "";
+            return { host: s.substring(1, rb), port: p };
+          }
+        }
+        var lc = s.lastIndexOf(":");
+        if (lc < 0) {
+          return { host: s, port: "" };
+        }
+        return { host: s.substring(0, lc), port: s.substring(lc + 1) };
+      }
+
+      function urlAuthority(host, port) {
+        if (host.indexOf(":") >= 0 && host.charAt(0) !== "[") {
+          return "[" + host + "]:" + port;
+        }
+        return host + ":" + port;
+      }
+
       function augment_live_nodes(nodes) {
         for (var i = 0, e = nodes.length; i < e; ++i) {
           var n = nodes[i];
           n.usedPercentage = Math.round((n.used + n.nonDfsUsedSpace) * 1.0 / n.capacity * 100);
 
-          var infoAddrParts = n.infoAddr.split("]:");
-          var dnHost = n.name.split(":")[0];
-          var port;
-          if (infoAddrParts.length > 1) {
-            // IPv6 url [xxxx:xxxx:...]:port
-            port = infoAddrParts[1];
-          } else {
-            // IPv4 url  host:port
-            port = n.infoAddr.split(":")[1];
-          }
+          var infoParts = splitHostPort(n.infoAddr);
+          var nameParts = splitHostPort(n.name);
+          var dnHost = nameParts.host;
+          var port = infoParts.port;
 
           var securePort = "0";
           if (n.infoSecureAddr) {
-            var secureAddrParts = n.infoSecureAddr.split("]:");
-            if (secureAddrParts.length > 1) {
-              securePort = secureAddrParts[1];
-            } else {
-            securePort = n.infoSecureAddr.split(":")[1];
-            }
+            securePort = splitHostPort(n.infoSecureAddr).port || "0";
           }
-          n.dnWebAddress = "http://" + dnHost + ":" + port;
+          n.dnWebAddress = "http://" + urlAuthority(dnHost, port);
           if (securePort != 0) {
-            n.dnWebAddress = "https://" + dnHost + ":" + securePort;
+            n.dnWebAddress = "https://" + urlAuthority(dnHost, securePort);
           }
 
           if (n.adminState === "In Service") {
