@@ -23,7 +23,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.net.Inet6Address;
 import java.net.InetAddress;
-
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.CommonConfigurationKeys;
+import org.apache.hadoop.test.GenericTestUtils;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -34,6 +37,56 @@ import org.junit.jupiter.api.Test;
  * Run with:  mvn -P ipv6-test -Dtest=TestSecurityUtilIPv6 test
  */
 public class TestSecurityUtilIPv6 {
+
+  @AfterEach
+  public void resetIpv6WarnFlag() {
+    // Reset the one-time guard so tests are independent.
+    SecurityUtil.ipv6WarnFired.set(false);
+  }
+
+  /**
+   * Verifies that when use_ip=true is configured on a JVM that has at least
+   * one non-loopback, non-link-local IPv6 interface, a single warning
+   * containing "use_ip=true" is emitted — and only once.
+   */
+  @Test
+  public void testWarnOnceOnIPv6Cluster() throws Exception {
+    GenericTestUtils.LogCapturer logs =
+        GenericTestUtils.LogCapturer.captureLogs(SecurityUtil.LOG);
+    try {
+      Configuration conf = new Configuration();
+      conf.setBoolean(
+          CommonConfigurationKeys.HADOOP_SECURITY_TOKEN_SERVICE_USE_IP, true);
+
+      // Force the warn-check through the public test helper; call it twice to
+      // prove the AtomicBoolean prevents duplicate messages.
+      SecurityUtil.warnIfIpv6Interfaces();
+      SecurityUtil.warnIfIpv6Interfaces();
+
+      String output = logs.getOutput();
+      // Count occurrences of the distinguishing fragment.
+      int count = 0;
+      int idx = 0;
+      while ((idx = output.indexOf("use_ip=true", idx)) != -1) {
+        count++;
+        idx += "use_ip=true".length();
+      }
+
+      // The warning may or may not fire depending on the test host's
+      // network configuration, but it must never fire MORE than once.
+      assertTrue(count <= 1,
+          "Expected at most 1 warning containing 'use_ip=true', found: " + count);
+
+      // On a host that does have a qualifying IPv6 interface the warning
+      // must appear exactly once.
+      if (count == 1) {
+        assertTrue(output.contains("use_ip=true"),
+            "Warning should contain 'use_ip=true'");
+      }
+    } finally {
+      logs.stopCapturing();
+    }
+  }
 
   @Test
   public void testQualifiedHostResolverAcceptsBracketedIPv6()

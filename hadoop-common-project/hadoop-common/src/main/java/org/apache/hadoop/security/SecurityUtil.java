@@ -65,6 +65,11 @@ import org.xbill.DNS.Name;
 import org.xbill.DNS.ResolverConfig;
 
 
+import java.net.Inet6Address;
+import java.net.NetworkInterface;
+import java.util.Enumeration;
+import java.util.concurrent.atomic.AtomicBoolean;
+
 import org.apache.hadoop.classification.VisibleForTesting;
 import org.apache.hadoop.thirdparty.com.google.common.net.InetAddresses;
 
@@ -94,6 +99,10 @@ public final class SecurityUtil {
   private static boolean logSlowLookups;
   private static int slowLookupThresholdMs;
   private static long cachingInterval = 0;
+
+  /** Guards the one-time IPv6 warning so it fires at most once per JVM. */
+  @VisibleForTesting
+  static final AtomicBoolean ipv6WarnFired = new AtomicBoolean(false);
 
   static {
     setConfigurationInternal(new Configuration());
@@ -149,6 +158,48 @@ public final class SecurityUtil {
     hostResolver = !useIpForTokenService
         ? new QualifiedHostResolver(cachingInterval)
         : new StandardHostResolver(cachingInterval);
+    if (useIpForTokenService) {
+      warnIfIpv6Interfaces();
+    }
+  }
+
+  /**
+   * Emit a one-time LOG.warn if the JVM has a non-loopback, non-link-local
+   * IPv6 interface while use_ip=true is in effect.  Operators on dual-stack
+   * or IPv6-only clusters may hit token-service string mismatches until
+   * HADOOP-XXXXX-F2 bracketing is fully deployed.
+   */
+  @VisibleForTesting
+  static void warnIfIpv6Interfaces() {
+    if (ipv6WarnFired.get()) {
+      return;
+    }
+    try {
+      Enumeration<NetworkInterface> ifaces = NetworkInterface.getNetworkInterfaces();
+      if (ifaces == null) {
+        return;
+      }
+      while (ifaces.hasMoreElements()) {
+        NetworkInterface iface = ifaces.nextElement();
+        Enumeration<java.net.InetAddress> addrs = iface.getInetAddresses();
+        while (addrs.hasMoreElements()) {
+          java.net.InetAddress addr = addrs.nextElement();
+          if (addr instanceof Inet6Address
+              && !addr.isLoopbackAddress()
+              && !addr.isLinkLocalAddress()) {
+            if (ipv6WarnFired.compareAndSet(false, true)) {
+              LOG.warn("hadoop.security.token.service.use_ip=true on a cluster"
+                  + " with IPv6 interfaces; if downstream services produce"
+                  + " malformed token-service strings, set use_ip=false."
+                  + " See HADOOP-XXXXX-F2 for context.");
+            }
+            return;
+          }
+        }
+      }
+    } catch (java.net.SocketException e) {
+      LOG.debug("Unable to enumerate network interfaces for IPv6 check", e);
+    }
   }
   
   /**
