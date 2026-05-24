@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+-->
+<configuration>
+  <property>
+    <name>dfs.replication</name>
+    <value>2</value>
+  </property>
+
+  <property>
+    <name>dfs.namenode.name.dir</name>
+    <value>/data/dfs/name</value>
+  </property>
+  <property>
+    <name>dfs.datanode.data.dir</name>
+    <value>/data/dfs/data</value>
+  </property>
+
+  <!-- Bind on the IPv6 wildcard. HttpServer2 dual-stack support
+       (HADOOP-19695) iterates getAllByName, so binding here on [::]
+       produces an IPv6 connector. -->
+  <property>
+    <name>dfs.namenode.rpc-bind-host</name>
+    <value>::</value>
+  </property>
+  <property>
+    <name>dfs.namenode.servicerpc-bind-host</name>
+    <value>::</value>
+  </property>
+  <property>
+    <name>dfs.namenode.http-bind-host</name>
+    <value>::</value>
+  </property>
+  <property>
+    <name>dfs.namenode.rpc-address</name>
+    <value>namenode:8020</value>
+  </property>
+  <property>
+    <name>dfs.namenode.http-address</name>
+    <value>namenode:9870</value>
+  </property>
+
+  <!-- DataNodes likewise bind on [::]; xferAddr advertised to the NN
+       will be the bracketed IPv6 form once HADOOP-17543 lands. -->
+  <property>
+    <name>dfs.datanode.address</name>
+    <value>[::]:9866</value>
+  </property>
+  <property>
+    <name>dfs.datanode.http.address</name>
+    <value>[::]:9864</value>
+  </property>
+  <property>
+    <name>dfs.datanode.ipc.address</name>
+    <value>[::]:9867</value>
+  </property>
+
+  <!-- Force hostname-based addressing end-to-end so client connect
+       paths exercise the new bracket-aware createSocketAddr in tandem
+       with hostname AAAA-resolution. -->
+  <property>
+    <name>dfs.client.use.datanode.hostname</name>
+    <value>true</value>
+  </property>
+  <property>
+    <name>dfs.datanode.use.datanode.hostname</name>
+    <value>true</value>
+  </property>
+
+  <!-- The DN's reported IP will be a numeric IPv6 literal; the
+       registration check would reject it under the default hostname
+       check. Disable that check here. -->
+  <property>
+    <name>dfs.namenode.datanode.registration.ip-hostname-check</name>
+    <value>false</value>
+  </property>
+
+  <property>
+    <name>dfs.permissions.enabled</name>
+    <value>false</value>
+  </property>
+</configuration>
