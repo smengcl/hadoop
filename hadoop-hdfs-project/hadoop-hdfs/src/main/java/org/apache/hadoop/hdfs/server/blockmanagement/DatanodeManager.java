@@ -1740,8 +1740,23 @@ public class DatanodeManager {
    */
   private static boolean isNameResolved(InetAddress address) {
     String hostname = address.getHostName();
-    String ip = address.getHostAddress();
+    String ip = canonicalizeAddress(address);
     return !hostname.equals(ip) || NetUtils.isLocalAddress(address);
+  }
+
+  /**
+   * Canonicalize an IP address string to RFC 5952 compressed form so that
+   * IPv6 addresses are always comparable regardless of whether the JDK or
+   * DNS returned expanded (fd00:dead:beef:0:0:0:0:21) vs compressed
+   * (fd00:dead:beef::21) notation.  For IPv4 the dotted-quad form is
+   * returned unchanged.
+   *
+   * @param address the InetAddress to canonicalize
+   * @return canonical string representation
+   */
+  @VisibleForTesting
+  static String canonicalizeAddress(InetAddress address) {
+    return InetAddresses.toAddrString(address);
   }
   
   private void setDatanodeDead(DatanodeDescriptor node) {
