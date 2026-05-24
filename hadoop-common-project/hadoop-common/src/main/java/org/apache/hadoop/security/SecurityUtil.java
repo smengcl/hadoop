@@ -243,11 +243,37 @@ public final class SecurityUtil {
   private static String replacePattern(String[] components, String hostname)
       throws IOException {
     String fqdn = hostname;
-    if (fqdn == null || fqdn.isEmpty() || fqdn.equals("0.0.0.0")) {
+    if (fqdn == null || fqdn.isEmpty() || fqdn.equals("0.0.0.0")
+        || isUnusableForKerberosHost(fqdn)) {
       fqdn = getLocalHostName(null);
     }
     return components[0] + "/" +
         StringUtils.toLowerCase(fqdn) + "@" + components[2];
+  }
+
+  /**
+   * Kerberos principals require an FQDN in the host component; numeric
+   * IPv4 wildcards and any IPv6 literal (bracketed or bare) are not
+   * acceptable. The KDC will not have a principal entry for an address
+   * literal, and substituting one silently produces SPNEGO failures
+   * that look like configuration drift. Detect those forms here and
+   * fall back to the local host's canonical name.
+   */
+  private static boolean isUnusableForKerberosHost(String host) {
+    if (host == null || host.isEmpty()) {
+      return true;
+    }
+    // Bracketed IPv6 literal: "[fd00::1]" or "[::1]".
+    if (host.charAt(0) == '[') {
+      return true;
+    }
+    // Bare IPv6 literal contains at least two ':' characters; hostnames
+    // and IPv4 forms have at most one.
+    int firstColon = host.indexOf(':');
+    if (firstColon >= 0 && firstColon != host.lastIndexOf(':')) {
+      return true;
+    }
+    return false;
   }
 
   /**
@@ -708,11 +734,26 @@ public final class SecurityUtil {
     public InetAddress resolve(String host) throws UnknownHostException {
       InetAddress addr = null;
 
-      if (InetAddresses.isInetAddress(host)) {
+      // Guava's InetAddresses.isInetAddress / forString do not accept
+      // bracketed IPv6 literals, and the search-list path below would
+      // also fail to find them. Unwrap brackets up front so a bracketed
+      // host returned by URI.getHost() (the common path through
+      // NetUtils.createSocketAddr) does not produce a spurious
+      // UnknownHostException.
+      String unwrapped = host;
+      if (unwrapped.length() > 1
+          && unwrapped.charAt(0) == '['
+          && unwrapped.charAt(unwrapped.length() - 1) == ']') {
+        unwrapped = unwrapped.substring(1, unwrapped.length() - 1);
+      }
+
+      if (InetAddresses.isInetAddress(unwrapped)) {
         // valid ip address. use it as-is
-        addr = InetAddresses.forString(host);
-        // set hostname
-        addr = InetAddress.getByAddress(host, addr.getAddress());
+        addr = InetAddresses.forString(unwrapped);
+        // set hostname (preserve the unbracketed form so downstream
+        // code does not see "[::1]" as the host name on the resolved
+        // InetAddress).
+        addr = InetAddress.getByAddress(unwrapped, addr.getAddress());
       } else if (host.endsWith(".")) {
         // a rooted host ends with a dot, ex. "host."
         // rooted hosts never use the search path, so only try an exact lookup
