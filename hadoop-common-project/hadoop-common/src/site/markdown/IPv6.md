@@ -409,6 +409,19 @@ mvn -Pipv6-test -pl hadoop-common-project/hadoop-common \
   -Dtest='TestNetUtilsIPv6,TestSecurityUtilIPv6' test
 ```
 
+A test that hard-codes `"127.0.0.1"` for a bind or connect address
+exercises only the IPv4 path even under this profile. New and updated
+tests should instead obtain the loopback from the stack-aware helpers in
+`GenericTestUtils`, which return the IPv6 loopback when the profile is
+active:
+
+* `getLoopbackAddressString()` — `"::1"` or `"127.0.0.1"`
+* `getLoopbackAuthority()` — bracketed for a URI authority: `"[::1]"` or `"127.0.0.1"`
+* `getLoopbackAddress()` — the corresponding `InetAddress`
+
+Converting the remaining hard-coded loopback literals across the test
+suites to these helpers is ongoing (HADOOP-XXXXX-F17).
+
 ### Continuous integration
 
 `.github/workflows/ipv6.yml` (HADOOP-XXXXX-F16) runs two jobs:

@@ -30,6 +30,8 @@ import java.lang.management.ManagementFactory;
 import java.lang.management.ThreadInfo;
 import java.lang.management.ThreadMXBean;
 import java.lang.reflect.InvocationTargetException;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -184,6 +186,47 @@ public abstract class GenericTestUtils {
    */
   public static String getMethodName() {
     return Thread.currentThread().getStackTrace()[2].getMethodName();
+  }
+
+  /**
+   * Return the loopback address literal appropriate to the IP stack the JVM
+   * was told to prefer: {@code "::1"} when {@code java.net.preferIPv6Addresses}
+   * is set (as the {@code ipv6-test} Maven profile does), otherwise
+   * {@code "127.0.0.1"}.
+   * <p>
+   * Tests that hard-code {@code "127.0.0.1"} silently exercise only the IPv4
+   * path even under the {@code ipv6-test} profile. Using this helper lets a
+   * single test body bind/connect over whichever stack the build selected.
+   * The returned literal is <em>not</em> bracketed; use
+   * {@link #getLoopbackAuthority()} when embedding it in a URI authority.
+   *
+   * @return {@code "::1"} or {@code "127.0.0.1"}
+   */
+  public static String getLoopbackAddressString() {
+    return Boolean.getBoolean("java.net.preferIPv6Addresses")
+        ? "::1" : "127.0.0.1";
+  }
+
+  /**
+   * As {@link #getLoopbackAddressString()} but bracketed for use in an RFC
+   * 3986 URI authority: {@code "[::1]"} for IPv6, {@code "127.0.0.1"} for
+   * IPv4.
+   *
+   * @return a loopback host token safe to concatenate with {@code ":" + port}
+   */
+  public static String getLoopbackAuthority() {
+    return Boolean.getBoolean("java.net.preferIPv6Addresses")
+        ? "[::1]" : "127.0.0.1";
+  }
+
+  /**
+   * The loopback {@link InetAddress} for the JVM's preferred IP stack.
+   *
+   * @return the IPv6 or IPv4 loopback address
+   * @throws UnknownHostException should not happen for a numeric literal
+   */
+  public static InetAddress getLoopbackAddress() throws UnknownHostException {
+    return InetAddress.getByName(getLoopbackAddressString());
   }
 
   /**

@@ -161,4 +161,28 @@ public class TestGenericTestUtils extends GenericTestUtils {
     assertEquals(Level.INFO, toLevel("INFO", Level.TRACE));
     assertEquals(Level.TRACE, toLevel("NonExistLevel", Level.TRACE));
   }
+
+  @Test
+  public void testLoopbackAddressHelpers() throws Exception {
+    final String prop = "java.net.preferIPv6Addresses";
+    final String original = System.getProperty(prop);
+    try {
+      System.setProperty(prop, "true");
+      assertEquals("::1", getLoopbackAddressString());
+      assertEquals("[::1]", getLoopbackAuthority());
+      assertTrue(getLoopbackAddress().getHostAddress().contains(":"),
+          "IPv6 loopback should be a numeric v6 literal");
+
+      System.setProperty(prop, "false");
+      assertEquals("127.0.0.1", getLoopbackAddressString());
+      assertEquals("127.0.0.1", getLoopbackAuthority());
+      assertEquals("127.0.0.1", getLoopbackAddress().getHostAddress());
+    } finally {
+      if (original == null) {
+        System.clearProperty(prop);
+      } else {
+        System.setProperty(prop, original);
+      }
+    }
+  }
 }
