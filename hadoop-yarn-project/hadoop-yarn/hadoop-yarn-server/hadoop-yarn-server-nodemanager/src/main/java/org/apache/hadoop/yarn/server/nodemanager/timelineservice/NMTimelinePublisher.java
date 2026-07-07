@@ -33,6 +33,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.service.CompositeService;
 import org.apache.hadoop.yarn.api.records.ApplicationId;
@@ -114,7 +115,10 @@ public class NMTimelinePublisher extends CompositeService {
     String webAppURLWithoutScheme =
         WebAppUtils.getNMWebAppURLWithoutScheme(conf);
     if (webAppURLWithoutScheme.contains(":")) {
-      httpPort = webAppURLWithoutScheme.split(":")[1];
+      // Bracket-aware port extraction: split(":")[1] mangles a bracketed
+      // IPv6 NM webapp address (e.g. "[::]:8042" -> "").
+      httpPort = String.valueOf(NetUtils.createSocketAddr(
+          webAppURLWithoutScheme, -1, null, false, false).getPort());
     }
 
     publishNMContainerEvents = conf.getBoolean(
@@ -133,7 +137,10 @@ public class NMTimelinePublisher extends CompositeService {
     // context will be updated after containerManagerImpl is started
     // hence NMMetricsPublisher is added subservice of containerManagerImpl
     this.nodeId = context.getNodeId();
-    this.httpAddress = nodeId.getHost() + ":" + httpPort;
+    // Bracket a bare IPv6 host so the published ALLOCATED_HOST_HTTP_ADDRESS_INFO
+    // is a valid authority (RFC 3986); no-op for IPv4/hostname.
+    this.httpAddress = (httpPort == null) ? nodeId.getHost()
+        : NetUtils.formatHostPort(nodeId.getHost(), Integer.parseInt(httpPort));
   }
 
   @Override

@@ -295,13 +295,13 @@ public class NodeTimelineCollectorManager extends TimelineCollectorManager {
     if (host == null || host.isEmpty()) {
       // if collector bind-host is not set, fall back to
       // timeline-service.bind-host to maintain compatibility
-      bindAddress =
-          conf.get(YarnConfiguration.DEFAULT_TIMELINE_SERVICE_BIND_HOST,
-              YarnConfiguration.DEFAULT_TIMELINE_SERVICE_BIND_HOST)
-              + ":" + startPort;
-    } else {
-      bindAddress = host + ":" + startPort;
+      host = conf.get(YarnConfiguration.DEFAULT_TIMELINE_SERVICE_BIND_HOST,
+          YarnConfiguration.DEFAULT_TIMELINE_SERVICE_BIND_HOST);
     }
+    // Bracket a bare IPv6 bind host (e.g. "::" or "fd00::1") so the
+    // URI.create(scheme + bindAddress) call below accepts the authority
+    // (RFC 3986); no-op for IPv4/hostname/already-bracketed hosts.
+    bindAddress = NetUtils.formatHostPort(host, startPort);
 
     try {
       HttpServer2.Builder builder = new HttpServer2.Builder()

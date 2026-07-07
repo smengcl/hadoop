@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.lang.reflect.UndeclaredThrowableException;
 import java.net.ConnectException;
 import java.net.HttpURLConnection;
+import java.net.InetSocketAddress;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.net.URI;
@@ -44,6 +45,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.apache.hadoop.classification.InterfaceAudience.Private;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.security.authentication.client.AuthenticationException;
 import org.apache.hadoop.security.authentication.client.ConnectionConfigurator;
@@ -186,9 +188,20 @@ public class TimelineConnector extends AbstractService {
 
   public static URI constructResURI(Configuration conf, String address,
       String uri) {
+    // Bracket a bare IPv6 host in the "host:port" address so URI.create
+    // accepts the authority (RFC 3986). If the address carries no port it is
+    // left untouched (URI.create handles a scheme + host + path directly).
+    String authority = address;
+    try {
+      InetSocketAddress addr =
+          NetUtils.createSocketAddr(address, -1, null, false, false);
+      authority = NetUtils.formatHostPort(addr.getHostString(), addr.getPort());
+    } catch (IllegalArgumentException ignored) {
+      // No port present / unparseable authority; use the address as-is.
+    }
     return URI.create(
         JOINER.join(YarnConfiguration.useHttps(conf) ? "https://" : "http://",
-            address, uri));
+            authority, uri));
   }
 
   DelegationTokenAuthenticatedURL getDelegationTokenAuthenticatedURL() {
