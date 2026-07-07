@@ -20,6 +20,7 @@ package org.apache.hadoop.yarn.server.webproxy;
 
 import org.apache.hadoop.yarn.api.records.ApplicationId;
 import org.apache.hadoop.yarn.util.TrackingUriPlugin;
+import org.apache.hadoop.yarn.webapp.util.WebAppUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -169,24 +170,73 @@ public class ProxyUriUtils {
   }
   
   /**
-   * Create a URI form a no scheme Url, such as is returned by the AM.
-   * @param noSchemeUrl the URL format returned by an AM
-   * @return a URI with an http scheme
+   * Create a URI from a no-scheme URL such as is returned by the AM.
+   *
+   * <p>An AM may report a tracking URL without a scheme, e.g.
+   * {@code host:port/path} or, for IPv6, {@code fd00::1:8088/path}.  When
+   * the host is a bare IPv6 literal the authority portion must be bracketed
+   * before the string is fed to {@link URI#URI(String)} because the
+   * single-argument constructor rejects unbracketed IPv6 literals in the
+   * authority ({@code new URI("http://fd00::1:8088/")} throws
+   * {@link URISyntaxException}).
+   *
+   * @param scheme   the scheme prefix to prepend when the URL has none
+   *                 (e.g. {@code "http://"})
+   * @param noSchemeUrl the URL as reported by the AM, with or without a scheme
+   * @return a URI with a scheme
    * @throws URISyntaxException if the url is not formatted correctly.
    */
   public static URI getUriFromAMUrl(String scheme, String noSchemeUrl)
       throws URISyntaxException {
-      if (getSchemeFromUrl(noSchemeUrl).isEmpty()) {
-        /*
-         * check is made to make sure if AM reports with scheme then it will be
-         * used by default otherwise it will default to the one configured using
-         * "yarn.http.policy".
-         */
-        return new URI(scheme + noSchemeUrl);
-      } else {
-        return new URI(noSchemeUrl);
+    /*
+     * Whether or not the AM reported a scheme, a bare IPv6 literal in the
+     * authority must be bracketed before the string is handed to
+     * new URI(String), which otherwise rejects it (see bracketAuthorityInUrl).
+     */
+    if (getSchemeFromUrl(noSchemeUrl).isEmpty()) {
+      // No scheme reported by the AM (the common case): prepend the configured
+      // scheme, then bracket the authority.
+      return new URI(bracketAuthorityInUrl(scheme + noSchemeUrl));
+    } else {
+      // AM reported its own scheme (honour it), but still bracket the authority.
+      return new URI(bracketAuthorityInUrl(noSchemeUrl));
+    }
+  }
+
+  /**
+   * Bracket a bare IPv6 literal in the authority portion of a URL so that
+   * {@link URI#URI(String)} accepts it. Handles URLs with or without a
+   * scheme, e.g. {@code http://fd00::1:8088/path} or {@code fd00::1:8088/path}.
+   * The authority runs from just after {@code ://} (or the start of the
+   * string) up to the first {@code /}. This is a no-op for IPv4 literals,
+   * hostnames, and already-bracketed IPv6 literals.
+   *
+   * @param url a URL string, with or without a scheme
+   * @return the same URL with any bare IPv6 authority bracketed
+   */
+  private static String bracketAuthorityInUrl(String url) {
+    int schemeEnd = url.indexOf("://");
+    int authStart = (schemeEnd >= 0) ? schemeEnd + 3 : 0;
+    String prefix = url.substring(0, authStart);
+    String remainder = url.substring(authStart);
+    // The authority ends at the first '/', '?' or '#'. A query or fragment can
+    // legitimately appear before any path (e.g. "host:port?a=b"); if we did not
+    // stop at those, the query/fragment would be folded into the authority and
+    // encodeHostPortForPathSegment would mangle it.
+    int boundary = -1;
+    for (int i = 0; i < remainder.length(); i++) {
+      char c = remainder.charAt(i);
+      if (c == '/' || c == '?' || c == '#') {
+        boundary = i;
+        break;
       }
     }
+    String authority = (boundary >= 0)
+        ? remainder.substring(0, boundary)
+        : remainder;
+    String rest = (boundary >= 0) ? remainder.substring(boundary) : "";
+    return prefix + WebAppUtils.encodeHostPortForPathSegment(authority) + rest;
+  }
 
   /**
    * Returns the first valid tracking link, if any, from the given id from the

@@ -22,6 +22,7 @@ import org.apache.hadoop.classification.VisibleForTesting;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.http.FilterContainer;
 import org.apache.hadoop.http.FilterInitializer;
+import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.util.StringUtils;
 import org.apache.hadoop.yarn.api.ApplicationConstants;
 import org.apache.hadoop.yarn.conf.HAUtil;
@@ -45,7 +46,15 @@ public class AmFilterInitializer extends FilterInitializer {
     List<String> proxies = WebAppUtils.getProxyHostsAndPortsForAmFilter(conf);
     StringBuilder sb = new StringBuilder();
     for (String proxy : proxies) {
-      sb.append(proxy.split(":")[0]).append(AmIpFilter.PROXY_HOSTS_DELIMITER);
+      // Use NetUtils to extract the host from a "host:port" address string so
+      // that IPv6 literals in bracket notation (e.g. "[fd00::1]:8088") are
+      // parsed correctly.  A naive split(":")[0] would return "[fd00" for such
+      // an address, which is not a resolvable hostname.  A default port of 0
+      // (unresolved) tolerates a port-less proxy address, as split(":")[0] did;
+      // only the host is used.
+      String proxyHost =
+          NetUtils.createSocketAddr(proxy, 0, null, false, false).getHostString();
+      sb.append(proxyHost).append(AmIpFilter.PROXY_HOSTS_DELIMITER);
     }
     sb.setLength(sb.length() - 1);
     params.put(AmIpFilter.PROXY_HOSTS, sb.toString());

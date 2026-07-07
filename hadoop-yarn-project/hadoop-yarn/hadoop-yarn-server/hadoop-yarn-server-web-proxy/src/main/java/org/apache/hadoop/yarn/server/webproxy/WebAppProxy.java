@@ -19,13 +19,14 @@
 package org.apache.hadoop.yarn.server.webproxy;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.net.URI;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.http.HttpServer2;
+import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.security.authorize.AccessControlList;
 import org.apache.hadoop.service.AbstractService;
-import org.apache.hadoop.util.StringUtils;
 import org.apache.hadoop.yarn.conf.HAUtil;
 import org.apache.hadoop.yarn.conf.YarnConfiguration;
 import org.apache.hadoop.yarn.exceptions.YarnRuntimeException;
@@ -69,8 +70,15 @@ public class WebAppProxy extends AbstractService {
           " of " + auth);
     }
     String proxy = WebAppUtils.getProxyHostAndPort(conf);
-    String[] proxyParts = proxy.split(":");
-    proxyHost = proxyParts[0];
+    // Use NetUtils to split host and port so that IPv6 literals in bracket
+    // notation (e.g. "[fd00::1]:8088") are handled correctly.  A bare
+    // "host:port" split on ':' breaks for any address with more than one colon.
+    // Use a default port of 0 (unresolved) so a port-less proxy address does
+    // not throw, matching the tolerance of the previous split(":") code; only
+    // the host is used here.
+    InetSocketAddress proxyAddr =
+        NetUtils.createSocketAddr(proxy, 0, null, false, false);
+    proxyHost = proxyAddr.getHostString();
 
     if (HAUtil.isFederationEnabled(conf)) {
       fetcher = new FedAppReportFetcher(conf);
@@ -83,12 +91,14 @@ public class WebAppProxy extends AbstractService {
           " is not set so the proxy will not run.");
     }
 
-    String[] parts = StringUtils.split(bindAddress, ':');
-    port = 0;
-    if (parts.length == 2) {
-      bindAddress = parts[0];
-      port = Integer.parseInt(parts[1]);
-    }
+    // Parse bindAddress (which may contain an IPv6 literal) into host + port
+    // using the bracket-aware NetUtils helper instead of a raw split on ':'.
+    // A default port of 0 preserves the previous behavior of binding on an
+    // ephemeral port (findPort) when the address carries no port.
+    InetSocketAddress bindAddr =
+        NetUtils.createSocketAddr(bindAddress, 0, null, false, false);
+    port = bindAddr.getPort();
+    bindAddress = bindAddr.getHostString();
 
     String bindHost = conf.getTrimmed(YarnConfiguration.PROXY_BIND_HOST, null);
     if (bindHost != null) {
@@ -108,11 +118,14 @@ public class WebAppProxy extends AbstractService {
   protected void serviceStart() throws Exception {
     try {
       Configuration conf = getConfig();
+      // NetUtils.formatHostPort brackets IPv6 literals so the URI authority
+      // is valid for both IPv4 ("host:port") and IPv6 ("[fd00::1]:port").
       HttpServer2.Builder b = new HttpServer2.Builder()
           .setName("proxy")
           .addEndpoint(
-              URI.create(WebAppUtils.getHttpSchemePrefix(conf) + bindAddress
-                  + ":" + port)).setFindPort(port == 0).setConf(getConfig())
+              URI.create(WebAppUtils.getHttpSchemePrefix(conf)
+                  + NetUtils.formatHostPort(bindAddress, port)))
+          .setFindPort(port == 0).setConf(getConfig())
           .setACL(acl);
       if (YarnConfiguration.useHttps(conf)) {
         WebAppUtils.loadSslConfiguration(b);
@@ -160,7 +173,7 @@ public class WebAppProxy extends AbstractService {
 
   @VisibleForTesting
   String getBindAddress() {
-    return bindAddress + ":" + port;
+    return NetUtils.formatHostPort(bindAddress, port);
   }
 
   @VisibleForTesting

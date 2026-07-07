@@ -636,12 +636,14 @@ public class WebAppProxyServlet extends HttpServlet {
         ProxyUtils.sendRedirect(req, resp, StringHelper.pjoin(getAhsAppPageUrlBase(),
             id.toString()));
       }
-    } else if (ProxyUriUtils.getSchemeFromUrl(originalUri).isEmpty()) {
+    } else {
+      // getUriFromAMUrl honours a scheme the AM already supplied and
+      // otherwise prepends the configured one; either way it brackets a bare
+      // IPv6 literal in the authority so new URI(String) does not throw on an
+      // AM address such as "fd00::1:8088" or "http://fd00::1:8088/".
       trackingUri =
           ProxyUriUtils.getUriFromAMUrl(WebAppUtils.getHttpSchemePrefix(conf),
             originalUri);
-    } else {
-      trackingUri = new URI(originalUri);
     }
 
     return trackingUri;

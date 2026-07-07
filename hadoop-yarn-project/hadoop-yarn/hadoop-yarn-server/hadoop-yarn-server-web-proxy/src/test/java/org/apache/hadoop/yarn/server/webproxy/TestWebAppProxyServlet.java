@@ -567,6 +567,145 @@ public class TestWebAppProxyServlet {
     Mockito.verify(resp, Mockito.times(1)).setContentType(MimeType.HTML);
   }
 
+  // -----------------------------------------------------------------------
+  // IPv6 tests (HADOOP-17843)
+  // -----------------------------------------------------------------------
+
+  /**
+   * When an ApplicationMaster registers a tracking URL whose host is a bare
+   * IPv6 literal (e.g. {@code fd00:dead:beef::21:8088/foo/bar}), the
+   * WebAppProxyServlet must build a valid bracketed URI and issue a redirect
+   * rather than throwing {@link java.net.URISyntaxException}.
+   *
+   * <p>The application state is set to FINISHED so the servlet sends a
+   * 302 redirect to the AM URL instead of trying to proxy the content (which
+   * would require a real server on the IPv6 address).  The test verifies that
+   * the Location header contains the bracketed IPv6 form.
+   */
+  @Test
+  void testWebAppProxyServletIPv6FinishedApp()
+      throws IOException, ServletException {
+    HttpServletRequest request = mock(HttpServletRequest.class);
+    when(request.getMethod()).thenReturn("GET");
+    when(request.getRemoteUser()).thenReturn(
+        CommonConfigurationKeys.DEFAULT_HADOOP_HTTP_STATIC_USER);
+    when(request.getPathInfo()).thenReturn("/application_00_0");
+    when(request.getHeaderNames()).thenReturn(Collections.emptyEnumeration());
+    when(request.getQueryString()).thenReturn(null);
+
+    StringWriter sw = new StringWriter();
+    PrintWriter pw = new PrintWriter(sw);
+    HttpServletResponse response = mock(HttpServletResponse.class);
+    when(response.getWriter()).thenReturn(pw);
+    // encodeRedirectURL is called by ProxyUtils.sendRedirect; return the
+    // target unchanged so the Location header contains the real URL.
+    when(response.encodeRedirectURL(Mockito.anyString()))
+        .thenAnswer(inv -> inv.getArgument(0));
+
+    ArgumentCaptor<String> locationCaptor =
+        ArgumentCaptor.forClass(String.class);
+
+    WebAppProxyServlet servlet = new WebAppProxyServlet();
+    YarnConfiguration conf = new YarnConfiguration();
+    servlet.setConf(conf);
+
+    ServletConfig config = mock(ServletConfig.class);
+    ServletContext context = mock(ServletContext.class);
+    when(config.getServletContext()).thenReturn(context);
+
+    AppReportFetcherForTest appReportFetcher =
+        new AppReportFetcherForTest(new YarnConfiguration());
+    when(context.getAttribute(WebAppProxy.FETCHER_ATTRIBUTE))
+        .thenReturn(appReportFetcher);
+    when(context.getAttribute(WebAppProxy.IS_SECURITY_ENABLED_ATTRIBUTE))
+        .thenReturn(Boolean.FALSE);
+    when(context.getAttribute(WebAppProxy.PROXY_HOST_ATTRIBUTE))
+        .thenReturn("localhost");
+
+    servlet.init(config);
+
+    // answer=11: IPv6 AM in FINISHED state → servlet must redirect
+    appReportFetcher.answer = 11;
+    // No IOException or URISyntaxException should escape
+    servlet.doGet(request, response);
+
+    // The servlet must have called setHeader(LOCATION, ...) for the redirect
+    Mockito.verify(response).setHeader(
+        Mockito.eq(ProxyUtils.LOCATION), locationCaptor.capture());
+    String location = locationCaptor.getValue();
+    assertNotNull(location, "Location header must be set for FINISHED app");
+
+    // The Location header must contain the bracketed IPv6 form and must be
+    // parseable as a URI.
+    assertTrue(location.contains("["),
+        "Location header must bracket the IPv6 host; got: " + location);
+    URI locationUri = URI.create(location);
+    assertNotNull(locationUri.getHost(),
+        "Location URI must have a valid host component");
+    assertTrue(locationUri.getHost().contains(":"),
+        "Location URI host must be an IPv6 literal; got: "
+            + locationUri.getHost());
+  }
+
+  /**
+   * When a RUNNING AM has a bare IPv6 tracking URL, the servlet must attempt
+   * to proxy the request to the (bracketed) IPv6 address.  There is no real
+   * server at that address, so an {@link IOException} from the HTTP client is
+   * expected.  The test verifies that the failure is NOT a
+   * {@link java.net.URISyntaxException} wrapped in an IOException – i.e. the
+   * URI was constructed correctly and the failure is at the network layer.
+   */
+  @Test
+  void testWebAppProxyServletIPv6RunningAmThrowsNetworkNotParseError()
+      throws ServletException, IOException {
+    HttpServletRequest request = mock(HttpServletRequest.class);
+    when(request.getMethod()).thenReturn("GET");
+    when(request.getRemoteUser()).thenReturn(
+        CommonConfigurationKeys.DEFAULT_HADOOP_HTTP_STATIC_USER);
+    when(request.getPathInfo()).thenReturn("/application_00_0");
+    when(request.getHeaderNames()).thenReturn(Collections.emptyEnumeration());
+    when(request.getQueryString()).thenReturn(null);
+
+    HttpServletResponse response = mock(HttpServletResponse.class);
+    when(response.getOutputStream()).thenReturn(
+        mock(ServletOutputStream.class));
+
+    WebAppProxyServlet servlet = new WebAppProxyServlet();
+    YarnConfiguration conf = new YarnConfiguration();
+    servlet.setConf(conf);
+
+    ServletConfig config = mock(ServletConfig.class);
+    ServletContext context = mock(ServletContext.class);
+    when(config.getServletContext()).thenReturn(context);
+
+    AppReportFetcherForTest appReportFetcher =
+        new AppReportFetcherForTest(new YarnConfiguration());
+    when(context.getAttribute(WebAppProxy.FETCHER_ATTRIBUTE))
+        .thenReturn(appReportFetcher);
+    when(context.getAttribute(WebAppProxy.IS_SECURITY_ENABLED_ATTRIBUTE))
+        .thenReturn(Boolean.FALSE);
+    // proxyHost must be resolvable; use loopback
+    when(context.getAttribute(WebAppProxy.PROXY_HOST_ATTRIBUTE))
+        .thenReturn("127.0.0.1");
+
+    servlet.init(config);
+
+    // answer=12: IPv6 AM in RUNNING state → servlet tries to proxy
+    appReportFetcher.answer = 12;
+
+    IOException ex = assertThrows(IOException.class,
+        () -> servlet.doGet(request, response),
+        "Servlet must throw IOException when the IPv6 AM is unreachable");
+
+    // The root cause must be a network-level failure (ConnectException or
+    // similar), NOT a URISyntaxException.  A URISyntaxException would mean
+    // the IPv6 literal was not bracketed before being passed to URI.create().
+    Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
+    assertFalse(cause instanceof java.net.URISyntaxException,
+        "Failure must not be URISyntaxException – that would indicate the "
+            + "IPv6 literal was not bracketed. Actual cause: " + cause);
+  }
+
   private String readInputStream(InputStream input) throws Exception {
     ByteArrayOutputStream data = new ByteArrayOutputStream();
     byte[] buffer = new byte[512];
@@ -719,6 +858,27 @@ public class TestWebAppProxyServlet {
         FetchedAppReport result = getDefaultApplicationReport(appId);
         result.getApplicationReport().setOriginalTrackingUrl("localhost:"
             + originalPort);
+        return result;
+      } else if (answer == 11) {
+        // IPv6 AM – FINISHED state so servlet sends redirect rather than
+        // proxying; exercises URI-building without requiring a real server.
+        FetchedAppReport result = getDefaultApplicationReport(appId);
+        result.getApplicationReport().setOriginalTrackingUrl(
+            "fd00:dead:beef::21:8088/foo/bar");
+        result.getApplicationReport()
+            .setYarnApplicationState(YarnApplicationState.FINISHED);
+        return result;
+      } else if (answer == 12) {
+        // IPv6 AM – RUNNING state so servlet attempts to proxy the request.
+        // There is no real IPv6 server listening, but the point of this case
+        // is that URI construction must not throw URISyntaxException – the
+        // expected failure is a ConnectException/IOException from the HTTP
+        // client, not a parsing error.
+        FetchedAppReport result = getDefaultApplicationReport(appId);
+        result.getApplicationReport().setOriginalTrackingUrl(
+            "fd00:dead:beef::21:8088/foo/bar");
+        result.getApplicationReport()
+            .setYarnApplicationState(YarnApplicationState.RUNNING);
         return result;
       }
       return null;
