@@ -453,6 +453,9 @@ References
   (WebHDFS), F12 (YARN webapp sweep), F15 (Timeline Service), F16 (CI),
   F19 (expanded smoke test).
 
+* [Running IPv6 Hadoop with Downstream Projects](./IPv6Downstream.html) —
+  operator guidance for Hive / Spark / HBase on an IPv6 cluster.
+
 * Docker Compose test harnesses:
     * `hadoop-dist/src/main/compose/hadoop-ipv6/README.md`
     * `hadoop-dist/src/main/compose/hadoop-ipv6-ha/README.md`
