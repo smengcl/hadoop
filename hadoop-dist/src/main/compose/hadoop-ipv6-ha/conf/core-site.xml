@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+-->
+<configuration>
+  <!-- Logical (nameservice) URI; ConfiguredFailoverProxyProvider resolves it
+       to whichever NameNode is currently active. -->
+  <property>
+    <name>fs.defaultFS</name>
+    <value>hdfs://ns1</value>
+  </property>
+
+  <!-- ZooKeeper ensemble for ZKFC automatic failover, reached over IPv6 by
+       its AAAA-resolved hostname. -->
+  <property>
+    <name>ha.zookeeper.quorum</name>
+    <value>zookeeper:2181</value>
+  </property>
+
+  <property>
+    <name>hadoop.tmp.dir</name>
+    <value>/data/tmp</value>
+  </property>
+</configuration>

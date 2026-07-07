@@ -1,0 +1,145 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# IPv6-only HDFS High Availability harness: two NameNodes, a three-node
+# JournalNode quorum (QJM shared edits), ZooKeeper + ZKFC automatic failover,
+# and two DataNodes. Everything is addressed over IPv6 (AAAA-resolved
+# hostnames) on a dedicated ULA subnet so it can run alongside the other
+# hadoop-ipv6* harnesses.
+#
+# Build prerequisite (repo root): mvn -DskipTests -Pdist package, then
+#   cp -r ../../../target/hadoop-3.6.0-SNAPSHOT .
+#   docker compose build && docker compose up -d
+#   ./ha-smoketest.sh          # run from the HOST (drives failover)
+
+services:
+  zookeeper:
+    # Standalone ZooKeeper run from the Hadoop image (bundled zookeeper jar) so
+    # we fully control zoo.cfg and bind the client port on the IPv6 wildcard.
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: hadoop-ipv6-ha:dev
+    hostname: zookeeper
+    command: ["zookeeper"]
+    networks:
+      v6net:
+        ipv6_address: fd00:dead:beef:2::5
+    volumes:
+      - zk-data:/data/zk
+
+  journalnode-1:
+    image: hadoop-ipv6-ha:dev
+    hostname: journalnode-1
+    command: ["journalnode"]
+    networks:
+      v6net:
+        ipv6_address: fd00:dead:beef:2::11
+    volumes:
+      - jn1-data:/data/dfs/journal
+
+  journalnode-2:
+    image: hadoop-ipv6-ha:dev
+    hostname: journalnode-2
+    command: ["journalnode"]
+    networks:
+      v6net:
+        ipv6_address: fd00:dead:beef:2::12
+    volumes:
+      - jn2-data:/data/dfs/journal
+
+  journalnode-3:
+    image: hadoop-ipv6-ha:dev
+    hostname: journalnode-3
+    command: ["journalnode"]
+    networks:
+      v6net:
+        ipv6_address: fd00:dead:beef:2::13
+    volumes:
+      - jn3-data:/data/dfs/journal
+
+  namenode-1:
+    image: hadoop-ipv6-ha:dev
+    hostname: namenode-1
+    command: ["namenode", "nn1"]
+    depends_on:
+      - zookeeper
+      - journalnode-1
+      - journalnode-2
+      - journalnode-3
+    ports:
+      - "39870:9870"
+    networks:
+      v6net:
+        ipv6_address: fd00:dead:beef:2::21
+    volumes:
+      - nn1-data:/data/dfs/name
+
+  namenode-2:
+    image: hadoop-ipv6-ha:dev
+    hostname: namenode-2
+    command: ["namenode", "nn2"]
+    depends_on:
+      - namenode-1
+    ports:
+      - "39871:9870"
+    networks:
+      v6net:
+        ipv6_address: fd00:dead:beef:2::22
+    volumes:
+      - nn2-data:/data/dfs/name
+
+  datanode-1:
+    image: hadoop-ipv6-ha:dev
+    hostname: datanode-1
+    command: ["datanode"]
+    depends_on:
+      - namenode-1
+    networks:
+      v6net:
+        ipv6_address: fd00:dead:beef:2::31
+    volumes:
+      - dn1-data:/data/dfs/data
+
+  datanode-2:
+    image: hadoop-ipv6-ha:dev
+    hostname: datanode-2
+    command: ["datanode"]
+    depends_on:
+      - namenode-1
+    networks:
+      v6net:
+        ipv6_address: fd00:dead:beef:2::32
+    volumes:
+      - dn2-data:/data/dfs/data
+
+networks:
+  v6net:
+    driver: bridge
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: fd00:dead:beef:2::/64
+        - subnet: 169.254.100.0/27
+
+volumes:
+  zk-data:
+  jn1-data:
+  jn2-data:
+  jn3-data:
+  nn1-data:
+  nn2-data:
+  dn1-data:
+  dn2-data:
