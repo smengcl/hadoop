@@ -35,22 +35,31 @@ As of Hadoop 3.6, the following capabilities are verified in the
 | YARN MapReduce job submission and execution over IPv6 | Supported (HADOOP-18312) |
 | JobHistory Server bind on `[::]` | Supported |
 | NetUtils bracket-aware address parsing and formatting | Supported |
+| HDFS High Availability (QJM JournalNode quorum, ZKFC failover) | Supported (HADOOP-XXXXX-F8) |
+| Router-Based Federation (RBF) | Supported (HADOOP-XXXXX-F9) |
+| HDFS Federation multi-NameService default-FS / GetConf | Supported (HADOOP-XXXXX-F10) |
+| WebHDFS redirect and exclude-DN parsing | Supported (HADOOP-XXXXX-F11) |
+| Kerberos / SASL secured HDFS + YARN | Supported (HADOOP-XXXXX-F1, F2, F29) |
+| SPNEGO + HTTPS web authentication | Supported (HADOOP-XXXXX-F30) |
+| YARN Timeline Service (collector bind, client, entity addr) | Supported (HADOOP-XXXXX-F15) |
+| YARN webapp deep-link / redirect / proxy URLs | Supported (HADOOP-18312, HADOOP-XXXXX-F12) |
+| WebAppProxy over IPv6 | Supported (HADOOP-17843) |
 
-The following areas are not yet fully verified and remain as open
-follow-up work items under HADOOP-11890:
+The following areas remain as open follow-up work items under HADOOP-11890:
 
 | Area | Follow-up |
 |:-----|:----------|
-| HDFS High Availability (JournalNode quorum, ZKFC, fencing) | HADOOP-XXXXX-F8 |
-| Router-Based Federation (RBF) | HADOOP-XXXXX-F9 |
-| HDFS Federation multi-NameService | HADOOP-XXXXX-F10 |
-| WebHDFS / HttpFS / NFS gateway | HADOOP-XXXXX-F11 |
-| Kerberos / SASL authentication over IPv6 | HADOOP-XXXXX-F1, HADOOP-XXXXX-F2 |
-| YARN Timeline Service | HADOOP-XXXXX-F15 |
-| WebAppProxy over IPv6 | HADOOP-17845, HADOOP-17843 |
+| HttpFS and NFS gateway (WebHDFS itself is done) | HADOOP-11890 |
+| IPv6-vs-IPv4 performance-regression baseline | HADOOP-XXXXX-F23 |
+| Downstream integration matrix (Hive / Spark / HBase) | HADOOP-XXXXX-F21 |
+| Bare / unbracketed IPv6 literals in metric & audit labels (cosmetic) | HADOOP-XXXXX-F22 |
+| Link-local (`%zone`) address support | HADOOP-XXXXX-F25 |
 
-Operators who rely on HA, RBF, Federation, or Kerberos should treat
-IPv6 deployment as experimental until those follow-up items are resolved.
+The core HDFS / YARN / MapReduce data and control paths — including HA,
+RBF, Federation, and Kerberos-secured clusters — are verified end to end
+by the compose harnesses and CI job described in the
+"Test harnesses and continuous integration" section below.
+The remaining items above are peripheral or non-functional.
 
 Prerequisites
 -------------
@@ -344,9 +353,11 @@ in the old format. Do not rename existing storage directories when
 upgrading.
 
 **YARN Web App deep links.**
-YARN container addresses and Web App deep links have not been fully
-audited for bracket-awareness. Known gaps are tracked under
-[HADOOP-18312](https://issues.apache.org/jira/browse/HADOOP-18312).
+YARN container addresses, standby-RM redirects, WebAppProxy, log-server
+deep links, and the Router federation blocks are now bracket-aware
+(HADOOP-18312 and HADOOP-XXXXX-F12). If you find a UI link or REST
+redirect that still emits an unbracketed IPv6 authority, please reopen
+HADOOP-18312 with the exact page/endpoint.
 
 **Metrics and audit labels.**
 Some code paths emit bare (unbracketed) IPv6 literals in `host:port`
@@ -360,6 +371,55 @@ IPv6 subnet on user-defined networks. The compose test harness is
 therefore technically dual-stack rather than IPv6-only even with
 `enable_ipv6: true`. Hadoop services do not bind or advertise on the
 IPv4 range. Production bare-metal deployments are not affected.
+
+Test harnesses and continuous integration
+------------------------------------------
+
+IPv6 support is exercised by three Docker Compose harnesses and a
+dedicated CI workflow. All use an on-host ULA subnet
+(`fd00:dead:beef::/64`), so no outbound IPv6 connectivity is required.
+
+### Compose harnesses
+
+* **`hadoop-dist/src/main/compose/hadoop-ipv6`** — the baseline
+  IPv6-only cluster (NameNode, two DataNodes, ResourceManager,
+  NodeManager, JobHistory Server). Its `smoketest.sh` verifies, over the
+  numeric IPv6 data path, HDFS `put`/`get`/`ls`/`cat`, hostname-mode
+  regression, bracketed DataNode `xferAddr`, the NameNode JMX/UI over
+  `[::1]`, MapReduce WordCount, HDFS append, snapshots, DistCp with an
+  explicit `hdfs://[fd00:dead:beef::10]:8020` authority,
+  TeraGen/TeraSort/TeraValidate, and DataNode decommission via
+  `dfs.hosts.exclude` + `dfsadmin -refreshNodes` (HADOOP-XXXXX-F19).
+* **`hadoop-dist/src/main/compose/hadoop-ipv6-ha`** — HDFS HA over IPv6:
+  QJM JournalNode quorum with ZKFC automatic failover (HADOOP-XXXXX-F8).
+* **`hadoop-dist/src/main/compose/hadoop-ipv6-secure`** — a
+  Kerberos/SASL-secured cluster with an in-network KDC, verifying
+  secured HDFS + YARN/MapReduce (HADOOP-XXXXX-F29) and SPNEGO + HTTPS
+  web authentication (HADOOP-XXXXX-F30) over IPv6.
+
+### Unit / integration tests
+
+Build-time IPv6 coverage runs under the `ipv6-test` Maven profile, which
+flips surefire to `-Djava.net.preferIPv4Stack=false
+-Djava.net.preferIPv6Addresses=true` (the default build pins
+`preferIPv4Stack=true`, which masks `Inet6Address` code paths):
+
+```bash
+mvn -Pipv6-test -pl hadoop-common-project/hadoop-common \
+  -Dtest='TestNetUtilsIPv6,TestSecurityUtilIPv6' test
+```
+
+### Continuous integration
+
+`.github/workflows/ipv6.yml` (HADOOP-XXXXX-F16) runs two jobs:
+
+* **unit-tests** — the push/PR gate. Path-filtered to the IPv6 surface,
+  it builds the IPv6 modules and runs the curated IPv6 test classes
+  under the `ipv6-test` profile. Reliable on GitHub-hosted runners
+  (IPv6 loopback is available even where outbound IPv6 is not).
+* **compose-smoketest** — opt-in (`workflow_dispatch`). Enables IPv6 on
+  the Docker daemon, builds the distribution, and runs the baseline
+  harness `smoketest.sh` end to end.
 
 References
 ----------
@@ -387,5 +447,13 @@ References
 * [HADOOP-17845](https://issues.apache.org/jira/browse/HADOOP-17845) —
   `ChecksumFileSystem`: colon-safe sidecar path construction
 
-* Docker Compose test harness:
-  `hadoop-dist/src/main/compose/hadoop-ipv6/README.md`
+* Follow-up work items filed under HADOOP-11890 (placeholder ids
+  `HADOOP-XXXXX-F*` pending upstream JIRA assignment): F1/F2/F29/F30
+  (Kerberos/SASL/SPNEGO), F8 (HA), F9 (RBF), F10 (Federation), F11
+  (WebHDFS), F12 (YARN webapp sweep), F15 (Timeline Service), F16 (CI),
+  F19 (expanded smoke test).
+
+* Docker Compose test harnesses:
+    * `hadoop-dist/src/main/compose/hadoop-ipv6/README.md`
+    * `hadoop-dist/src/main/compose/hadoop-ipv6-ha/README.md`
+    * `hadoop-dist/src/main/compose/hadoop-ipv6-secure/README.md`
