@@ -16,13 +16,11 @@
     <value>hdfs://namenode:8020</value>
   </property>
 
-  <!-- Token-service strings on numeric IPv6 are messy; use hostnames so
-       AAAA-resolution stays the source of truth. Tracked as a follow-up
-       (SecurityUtil.buildTokenService should bracket-wrap IPv6 IPs). -->
-  <property>
-    <name>hadoop.security.token.service.use_ip</name>
-    <value>false</value>
-  </property>
+  <!-- Leave hadoop.security.token.service.use_ip at its default (true):
+       SecurityUtil.buildTokenService now bracket-wraps IPv6 literals
+       (HADOOP-XXXXX-F2), so numeric-IPv6 token service ids such as
+       "[fd00:dead:beef::10]:8020" round-trip correctly. This keeps the
+       IP-direct posture consistent with hdfs-site.xml (HADOOP-XXXXX-F7). -->
 
   <property>
     <name>hadoop.tmp.dir</name>

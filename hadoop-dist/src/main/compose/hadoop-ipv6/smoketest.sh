@@ -40,7 +40,14 @@ hdfs dfsadmin -safemode wait
 echo "[smoketest] === Cluster topology ==="
 hdfs dfsadmin -report
 
-echo "[smoketest] === HDFS smoke (hostname mode) ==="
+# IP-direct is now the cluster default (HADOOP-XXXXX-F7): dfs.client/
+# datanode.use.datanode.hostname are both false, so put/get/cat below
+# connect straight to the DN's bracketed numeric IPv6 xferAddr. This
+# exercises the bracket-aware NetUtils.createSocketAddr (HADOOP-17543) and
+# DataTransferSaslUtil.getPeerAddress on the real write AND read path, and
+# proves DN registration succeeds against a numeric IPv6 literal with the
+# default registration hostname check enabled (HADOOP-XXXXX-F3).
+echo "[smoketest] === HDFS smoke (default: IP-direct numeric IPv6) ==="
 echo 'hello world hello ipv6 world' > /tmp/payload.txt
 hdfs dfs -mkdir -p /smoke
 hdfs dfs -rm -f -skipTrash /smoke/payload.txt 2>/dev/null || true
@@ -49,17 +56,15 @@ check "hdfs ls"    hdfs dfs -ls /smoke
 check "hdfs cat"   bash -c 'diff <(hdfs dfs -cat /smoke/payload.txt) /tmp/payload.txt'
 check "hdfs get"   bash -c 'rm -f /tmp/echo.txt && hdfs dfs -get /smoke/payload.txt /tmp/echo.txt && diff /tmp/echo.txt /tmp/payload.txt'
 
-# The hostname-mode path above masks any regression in the bracketed-IP
-# connect path (HADOOP-17543: NetUtils.createSocketAddr for "[ipv6]:port",
-# DataTransferSaslUtil.getPeerAddress for the same). Repeat cat / get
-# with dfs.client.use.datanode.hostname=false so the client connects
-# directly to the DN's bracketed IPv6 xferAddr.
-echo "[smoketest] === HDFS smoke (IP-direct mode, exercises HADOOP-17543) ==="
-IP_DIRECT="-Ddfs.client.use.datanode.hostname=false"
-check "IP-direct hdfs cat" \
-    bash -c "diff <(hdfs dfs $IP_DIRECT -cat /smoke/payload.txt) /tmp/payload.txt"
-check "IP-direct hdfs get" \
-    bash -c "rm -f /tmp/echo-ip.txt && hdfs dfs $IP_DIRECT -get /smoke/payload.txt /tmp/echo-ip.txt && diff /tmp/echo-ip.txt /tmp/payload.txt"
+# Regression in the other direction: hostname mode must still work, so the
+# bracket-aware createSocketAddr path is exercised alongside AAAA-resolution
+# of the DN hostname. Force dfs.client.use.datanode.hostname=true on the CLI.
+echo "[smoketest] === HDFS smoke (hostname mode, regression) ==="
+HOSTNAME_MODE="-Ddfs.client.use.datanode.hostname=true"
+check "hostname-mode hdfs cat" \
+    bash -c "diff <(hdfs dfs $HOSTNAME_MODE -cat /smoke/payload.txt) /tmp/payload.txt"
+check "hostname-mode hdfs get" \
+    bash -c "rm -f /tmp/echo-hn.txt && hdfs dfs $HOSTNAME_MODE -get /smoke/payload.txt /tmp/echo-hn.txt && diff /tmp/echo-hn.txt /tmp/payload.txt"
 
 # Verify the DN's xferAddr is actually a bracketed IPv6 form. This is the
 # load-bearing assertion - if DatanodeID dropped the bracket, the JSON

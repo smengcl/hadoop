@@ -163,76 +163,79 @@ those values; no separate `*-bind-host` key exists for JHS. If the
 host has only IPv6 connectivity, set `preferIPv6Addresses=true` in
 `HADOOP_OPTS` so the JVM binds the correct interface.
 
-Required Workarounds
---------------------
+Previously Required Workarounds (now resolved)
+----------------------------------------------
 
-Several Hadoop subsystems have not yet been updated to handle IPv6
-addresses correctly. Until the underlying JIRAs are resolved, operators
-must set the following properties.
+Earlier IPv6 deployments needed the properties below to sidestep
+subsystems that did not yet understand numeric IPv6 addresses. Those
+defects are now fixed in trunk and the numeric-IPv6 ("IP-direct") data
+path is exercised end-to-end by the docker-compose harness under
+`hadoop-dist/src/main/compose/hadoop-ipv6` (see the smoke test, which
+runs with these workarounds removed). They are retained here only as a
+reference for operators running older releases.
 
-### `hadoop.security.token.service.use_ip` — set to `false`
+### `hadoop.security.token.service.use_ip` (default `true` now works)
 
-**File:** `core-site.xml`
+`SecurityUtil.buildTokenService` builds delegation-token service
+identifiers. When built from a numeric IPv6 address the colons in the
+address used to collide with the `host:port` separator, producing
+malformed tokens, so operators set this to `false` to fall back to the
+hostname. `buildTokenService` now brackets IPv6 literals
+([HADOOP-XXXXX-F2](https://issues.apache.org/jira/browse/HADOOP-11890)),
+so a numeric-IPv6 service id such as `[fd00:dead:beef::10]:8020`
+round-trips correctly and the default (`true`) is safe.
 
-```xml
-<property>
-  <name>hadoop.security.token.service.use_ip</name>
-  <value>false</value>
-</property>
-```
+### `dfs.namenode.datanode.registration.ip-hostname-check` (default `true` now works)
 
-`SecurityUtil.buildTokenService` constructs delegation-token service
-identifiers. When the identifier is built from a numeric IPv6 address
-the colon characters in the address collide with the `host:port`
-separator, producing malformed tokens. Setting this property to `false`
-instructs Hadoop to use the hostname instead of the IP address as the
-service identifier, keeping the format unambiguous.
+During DataNode registration the NameNode checks that the DataNode's
+reported address matches the address the RPC connection arrived on.
+IPv6 literals can be reported in expanded (`fd00:dead:beef:0:0:0:0:21`)
+or compressed (`fd00:dead:beef::21`) form, which previously failed a
+naive string comparison, so operators disabled the check.
+`DatanodeManager.canonicalizeAddress`
+([HADOOP-XXXXX-F3](https://issues.apache.org/jira/browse/HADOOP-11890))
+now normalizes both sides before comparing, so the default (`true`)
+accepts a numeric-IPv6 registration.
 
-This workaround will become unnecessary once
-[HADOOP-XXXXX-F2](https://issues.apache.org/jira/browse/HADOOP-11890)
-adds bracket-aware handling to `buildTokenService`.
+### `dfs.client.use.datanode.hostname` (not required)
 
-### `dfs.namenode.datanode.registration.ip-hostname-check` — set to `false`
+Setting this to `true` directs HDFS clients to reach DataNodes by
+hostname rather than by the numeric xferAddr, which used to be
+recommended as a way to avoid the unbracketed-IPv6 connect path. With
+the bracket-aware `NetUtils.createSocketAddr`
+([HADOOP-17543](https://issues.apache.org/jira/browse/HADOOP-17543))
+the client connects directly to a DataNode's bracketed numeric IPv6
+xferAddr, so neither this property nor its DataNode-side counterpart
+`dfs.datanode.use.datanode.hostname` is required. Leave both at their
+`false` defaults for a pure numeric-IPv6 cluster; hostname mode still
+works if you prefer it.
 
-**File:** `hdfs-site.xml`
+### MapReduce task JVMs must not pin `java.net.preferIPv4Stack=true`
 
-```xml
-<property>
-  <name>dfs.namenode.datanode.registration.ip-hostname-check</name>
-  <value>false</value>
-</property>
-```
-
-During DataNode registration the NameNode verifies that the DataNode's
-reported IP address can be resolved back to a hostname matching the
-registration hostname. With IPv6 addresses the reverse DNS name is in
-`ip6.arpa.` form, which often does not match the forward DNS hostname.
-Disabling this check allows DataNodes to register without a matching
-PTR record.
-
-This workaround will become unnecessary once
-[HADOOP-XXXXX-F3](https://issues.apache.org/jira/browse/HADOOP-11890)
-canonicalizes IPv6 addresses in the registration check.
-
-### `dfs.client.use.datanode.hostname` — set to `true` (recommended)
-
-**File:** `hdfs-site.xml`
+**File:** `mapred-site.xml` (older releases only)
 
 ```xml
 <property>
-  <name>dfs.client.use.datanode.hostname</name>
-  <value>true</value>
+  <name>mapreduce.admin.map.child.java.opts</name>
+  <value>-Dhadoop.metrics.log.level=WARN</value>
+</property>
+<property>
+  <name>mapreduce.admin.reduce.child.java.opts</name>
+  <value>-Dhadoop.metrics.log.level=WARN</value>
 </property>
 ```
 
-This property directs HDFS clients to connect to DataNodes using the
-hostname from the block location rather than the numeric IP address.
-It is not strictly required after the bracket-aware address formatting
-introduced in [HADOOP-17543](https://issues.apache.org/jira/browse/HADOOP-17543),
-but it is recommended for clarity and for environments where DataNode
-IP addresses are not routable from clients. When set, also enable
-`dfs.datanode.use.datanode.hostname=true` on the DataNode side so
-inter-DataNode pipeline connections follow the same path.
+The daemons pick up the JVM stack preference from `HADOOP_OPTS`, but
+map/reduce task JVMs (`YarnChild`) are launched by the NodeManager with
+`mapreduce.admin.{map,reduce}.child.java.opts`, whose historical default
+pinned `-Djava.net.preferIPv4Stack=true`. That forces an IPv4-only
+socket on every task, so a task connecting to a DataNode's numeric IPv6
+xferAddr fails with `java.nio.channels.UnsupportedAddressTypeException`
+even though the daemons and the MR ApplicationMaster run dual-stack.
+The pin has been removed from the default
+([HADOOP-XXXXX-F28](https://issues.apache.org/jira/browse/HADOOP-11890)),
+so on trunk no override is needed; operators on older releases must set
+the properties above (dropping the `preferIPv4Stack=true` token).
 
 Migration Path
 --------------

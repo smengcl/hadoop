@@ -81,8 +81,9 @@ whole stack.
 | `IllegalArgumentException: Does not contain a valid host:port authority: ::1:50010` in DataNode logs | `NetUtils.createSocketAddr` did not bracket a bare IPv6 input. Recheck `NetUtils.bracketUnbracketedIPv6` (commit 1). |
 | `dfsadmin -report` shows `Name: ::1:9866` (no brackets) | `DatanodeID.setIpAndXferPort` is still concatenating raw. Recheck commit 2 changed every formatter to `NetUtils.formatHostPort`. |
 | NN web UI loads but DataNode link 404s, with a host like `fd00` (truncated) | `dfshealth.js` host-extraction not bracket-aware (commit 4 not applied or stale browser cache). |
-| `RetriesExhaustedException` connecting to `[fd00:...]:8020` | DataNode could not register because `dfs.namenode.datanode.registration.ip-hostname-check` is true and the DN's reverse lookup returns numeric. Compose disables this check. |
+| DataNode never registers (`0 datanodes` in `dfsadmin -report`) with a hostname-check rejection in the NN log | `DatanodeManager.canonicalizeAddress` (HADOOP-XXXXX-F3) is missing/stale, so the expanded vs. compressed IPv6 forms fail to match under the default `dfs.namenode.datanode.registration.ip-hostname-check=true`. This compose runs with the check enabled and relies on that fix. |
 | `UnresolvedAddressException` on hostname like `datanode-1` | Docker DNS gave only A record but JVM picked v6 first (or vice versa). Confirm `enable_ipv6: true` on `v6net` and `HADOOP_OPTS` includes `preferIPv6Addresses=true`. |
+| MapReduce task fails with `java.nio.channels.UnsupportedAddressTypeException` in `DFSInputStream`/`newConnectedPeer` | The task JVM opened an IPv4-only socket (pinned `preferIPv4Stack=true`) and tried to reach a DataNode's numeric IPv6 xferAddr. Fixed by dropping the pin from `mapreduce.admin.{map,reduce}.child.java.opts` default (HADOOP-XXXXX-F28); on older releases override those opts. |
 | YARN container dies with `java.net.SocketException: Network is unreachable` | NM advertised an IPv6 address that the AM cannot reach. Confirm the NM's `yarn.nodemanager.bind-host` is `::`. |
 
 ## Known limitations

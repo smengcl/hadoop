@@ -64,25 +64,19 @@
     <value>[::]:9867</value>
   </property>
 
-  <!-- Force hostname-based addressing end-to-end so client connect
-       paths exercise the new bracket-aware createSocketAddr in tandem
-       with hostname AAAA-resolution. -->
-  <property>
-    <name>dfs.client.use.datanode.hostname</name>
-    <value>true</value>
-  </property>
-  <property>
-    <name>dfs.datanode.use.datanode.hostname</name>
-    <value>true</value>
-  </property>
+  <!-- IP-direct mode is the DEFAULT here (HADOOP-XXXXX-F7): both
+       dfs.client.use.datanode.hostname and dfs.datanode.use.datanode.hostname
+       are left at their false defaults, so the client connects to the DN's
+       numeric bracketed IPv6 xferAddr and the whole data path exercises the
+       bracket-aware NetUtils.createSocketAddr (HADOOP-17543) and
+       DataTransferSaslUtil.getPeerAddress. The earlier hostname-mode crutch
+       has been removed now that F5/F7 make the numeric path work end-to-end.
 
-  <!-- The DN's reported IP will be a numeric IPv6 literal; the
-       registration check would reject it under the default hostname
-       check. Disable that check here. -->
-  <property>
-    <name>dfs.namenode.datanode.registration.ip-hostname-check</name>
-    <value>false</value>
-  </property>
+       The DataNode registers with a numeric IPv6 literal as its reported
+       "hostname"; DatanodeManager.canonicalizeAddress (HADOOP-XXXXX-F3)
+       normalizes it so the default registration hostname check passes.
+       We therefore leave dfs.namenode.datanode.registration.ip-hostname-check
+       at its default (true) rather than disabling it. -->
 
   <property>
     <name>dfs.permissions.enabled</name>
