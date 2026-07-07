@@ -661,6 +661,46 @@ public class TestDFSUtil {
         DFSUtil.substituteForWildcardAddress("127.0.0.1:12345", "foo"));
   }
 
+  @Test
+  public void testSubstituteForWildcardAddressIPv6() throws IOException {
+    // A numeric IPv6 default host must come back bracketed, since the result
+    // feeds URI.create() in the getInfoServer* callers. Both the IPv4 and the
+    // IPv6 wildcard forms trigger the substitution.
+    assertEquals("[fd00:dead:beef::10]:12345",
+        DFSUtil.substituteForWildcardAddress("0.0.0.0:12345",
+            "fd00:dead:beef::10"));
+    assertEquals("[fd00:dead:beef::10]:12345",
+        DFSUtil.substituteForWildcardAddress("[::]:12345",
+            "fd00:dead:beef::10"));
+    // The substituted authority must parse as a URI without throwing.
+    URI.create("http://" + DFSUtil.substituteForWildcardAddress(
+        "[::]:12345", "fd00:dead:beef::10"));
+    // A hostname default host is returned unchanged (no spurious brackets).
+    assertEquals("nn1:12345",
+        DFSUtil.substituteForWildcardAddress("0.0.0.0:12345", "nn1"));
+  }
+
+  @Test
+  public void testGetNNUriIPv6() {
+    // getNNUri builds hdfs://<host>[:port]; a numeric IPv6 host must be
+    // bracketed so URI parsing does not throw (NameNode startup calls this).
+    // Use createUnresolved so getHostName() returns the literal verbatim
+    // rather than the JDK's expanded reverse-lookup form.
+    assertEquals("hdfs://[fd00:dead:beef::10]:12345",
+        DFSUtilClient.getNNUri(
+            InetSocketAddress.createUnresolved("fd00:dead:beef::10", 12345))
+            .toString());
+    // Default RPC port is omitted, host still bracketed.
+    assertEquals("hdfs://[fd00:dead:beef::10]",
+        DFSUtilClient.getNNUri(InetSocketAddress.createUnresolved(
+            "fd00:dead:beef::10",
+            HdfsClientConfigKeys.DFS_NAMENODE_RPC_PORT_DEFAULT)).toString());
+    // Hostname form is unaffected (non-default port shown).
+    assertEquals("hdfs://nn1:9999",
+        DFSUtilClient.getNNUri(
+            InetSocketAddress.createUnresolved("nn1", 9999)).toString());
+  }
+
   private static Collection<URI> getInternalNameServiceUris(Configuration conf,
                                                             String... keys) {
     final Collection<String> ids = DFSUtil.getInternalNameServices(conf);

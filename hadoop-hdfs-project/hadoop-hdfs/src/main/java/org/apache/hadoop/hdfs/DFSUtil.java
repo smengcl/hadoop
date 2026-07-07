@@ -1098,7 +1098,10 @@ public class DFSUtil {
     InetSocketAddress sockAddr = NetUtils.createSocketAddr(configuredAddress);
     final InetAddress addr = sockAddr.getAddress();
     if (addr != null && addr.isAnyLocalAddress()) {
-      return defaultHost + ":" + sockAddr.getPort();
+      // formatHostPort brackets a numeric IPv6 defaultHost; the result feeds
+      // URI.create() in the getInfoServer* callers, which rejects an
+      // unbracketed IPv6 authority.
+      return NetUtils.formatHostPort(defaultHost, sockAddr.getPort());
     } else {
       return configuredAddress;
     }

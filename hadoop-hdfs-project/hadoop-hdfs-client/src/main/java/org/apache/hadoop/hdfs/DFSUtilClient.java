@@ -919,11 +919,19 @@ public class DFSUtilClient {
 
   public static URI getNNUri(InetSocketAddress namenode) {
     int port = namenode.getPort();
-    String portString =
-        (port == HdfsClientConfigKeys.DFS_NAMENODE_RPC_PORT_DEFAULT) ?
-        "" : (":" + port);
-    return URI.create(HdfsConstants.HDFS_URI_SCHEME + "://"
-        + namenode.getHostName() + portString);
+    // Omit the port when it is the default (preserves hdfs://host form).
+    int uriPort =
+        (port == HdfsClientConfigKeys.DFS_NAMENODE_RPC_PORT_DEFAULT) ? -1 : port;
+    try {
+      // The multi-arg URI constructor brackets a numeric IPv6 host
+      // automatically; string-concatenating the host (as before) produced an
+      // unbracketed authority that URI.create() rejects for IPv6 literals.
+      return new URI(HdfsConstants.HDFS_URI_SCHEME, null,
+          namenode.getHostName(), uriPort, null, null, null);
+    } catch (URISyntaxException e) {
+      throw new IllegalArgumentException(
+          "Could not build the NameNode URI for " + namenode, e);
+    }
   }
 
   public static InterruptedIOException toInterruptedIOException(String message,
