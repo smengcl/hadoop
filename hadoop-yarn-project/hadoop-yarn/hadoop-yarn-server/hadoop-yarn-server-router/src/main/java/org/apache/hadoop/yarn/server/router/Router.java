@@ -39,6 +39,7 @@ import org.apache.hadoop.classification.InterfaceAudience.Private;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.metrics2.lib.DefaultMetricsSystem;
 import org.apache.hadoop.metrics2.source.JvmMetrics;
+import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.security.HttpCrossOriginFilterInitializer;
 import org.apache.hadoop.security.SecurityUtil;
 import org.apache.hadoop.security.UserGroupInformation;
@@ -241,8 +242,8 @@ public class Router extends CompositeService {
           WebAppProxyServlet.class);
       builder.withAttribute(WebAppProxy.FETCHER_ATTRIBUTE, fetcher);
       String proxyHostAndPort = getProxyHostAndPort(conf);
-      String[] proxyParts = proxyHostAndPort.split(":");
-      builder.withAttribute(WebAppProxy.PROXY_HOST_ATTRIBUTE, proxyParts[0]);
+      builder.withAttribute(WebAppProxy.PROXY_HOST_ATTRIBUTE,
+          NetUtils.createSocketAddr(proxyHostAndPort, 0, null, false, false).getHostString());
     }
     RouterWebApp routerWebApp = new RouterWebApp(this);
     builder.withResourceConfig(routerWebApp.resourceConfig());

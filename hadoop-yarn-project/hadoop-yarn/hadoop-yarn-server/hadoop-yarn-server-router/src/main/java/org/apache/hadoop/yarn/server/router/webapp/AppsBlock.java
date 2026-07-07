@@ -114,7 +114,7 @@ public class AppsBlock extends RouterBlock {
         String webAddress = subClusterInfo.getRMWebServiceAddress();
         String herfWebAppAddress;
         if (webAddress != null && !webAddress.isEmpty()) {
-          herfWebAppAddress = WebAppUtils.getHttpSchemePrefix(conf) + webAddress;
+          herfWebAppAddress = WebAppUtils.getHttpSchemePrefixedURL(conf, webAddress);
           return getSubClusterAppsInfoByWebAddress(herfWebAppAddress, states);
         }
       }

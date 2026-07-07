@@ -109,7 +109,7 @@ public class NodesBlock extends RouterBlock {
         String herfWebAppAddress;
         if (webAddress != null && !webAddress.isEmpty()) {
           herfWebAppAddress =
-              WebAppUtils.getHttpSchemePrefix(this.router.getConfig()) + webAddress;
+              WebAppUtils.getHttpSchemePrefixedURL(this.router.getConfig(), webAddress);
           return getSubClusterNodesInfoByWebAddress(herfWebAppAddress);
         }
       }
@@ -182,7 +182,7 @@ public class NodesBlock extends RouterBlock {
           String herfWebAppAddress = "";
           if (httpAddress != null && !httpAddress.isEmpty()) {
             herfWebAppAddress =
-                WebAppUtils.getHttpSchemePrefix(this.router.getConfig()) + httpAddress;
+                WebAppUtils.getHttpSchemePrefixedURL(this.router.getConfig(), httpAddress);
           }
           row.td().a(herfWebAppAddress, httpAddress).__();
         }

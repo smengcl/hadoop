@@ -29,6 +29,7 @@ import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.metrics2.lib.DefaultMetricsSystem;
+import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.registry.client.api.RegistryOperations;
 import org.apache.hadoop.registry.client.api.RegistryOperationsFactory;
 import org.apache.hadoop.registry.client.binding.RegistryPathUtils;
@@ -1084,7 +1085,8 @@ public class ServiceScheduler extends CompositeService {
     boolean useKerberos = UserGroupInformation.isSecurityEnabled();
     boolean printSyncResult = false;
     try {
-      String port = conf.get("yarn.nodemanager.webapp.address").split(":")[1];
+      int port = NetUtils.createSocketAddr(
+          conf.get("yarn.nodemanager.webapp.address"), -1, null, false, false).getPort();
       spec = ServiceApiUtil.jsonSerDeser.toJson(yarnApp);
       for (org.apache.hadoop.yarn.service.api.records.Component c :
           yarnApp.getComponents()) {
@@ -1108,9 +1110,7 @@ public class ServiceScheduler extends CompositeService {
           } else {
             requestPath.append(HTTP_PREFIX);
           }
-          requestPath.append(bareHost)
-              .append(":")
-              .append(port)
+          requestPath.append(NetUtils.formatHostPort(bareHost, port))
               .append("/ws/v1/node/yarn/sysfs/")
               .append(UserGroupInformation.getCurrentUser()
                   .getShortUserName())

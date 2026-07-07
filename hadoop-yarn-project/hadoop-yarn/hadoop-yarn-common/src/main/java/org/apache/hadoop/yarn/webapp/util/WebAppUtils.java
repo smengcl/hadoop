@@ -69,15 +69,15 @@ public class WebAppUtils {
 
   public static void setRMWebAppPort(Configuration conf, int port) {
     String hostname = getRMWebAppURLWithoutScheme(conf);
-    hostname =
-        (hostname.contains(":")) ? hostname.substring(0, hostname.indexOf(":"))
-            : hostname;
+    hostname = hostname.contains(":")
+        ? NetUtils.createSocketAddr(hostname, port, null, false, false).getHostString()
+        : hostname;
     setRMWebAppHostnameAndPort(conf, hostname, port);
   }
 
   public static void setRMWebAppHostnameAndPort(Configuration conf,
       String hostname, int port) {
-    String resolvedAddress = hostname + ":" + port;
+    String resolvedAddress = NetUtils.formatHostPort(hostname, port);
     if (YarnConfiguration.useHttps(conf)) {
       conf.set(YarnConfiguration.RM_WEBAPP_HTTPS_ADDRESS, resolvedAddress);
     } else {
@@ -89,10 +89,10 @@ public class WebAppUtils {
       String hostName, int port) {
     if (YarnConfiguration.useHttps(conf)) {
       conf.set(YarnConfiguration.NM_WEBAPP_HTTPS_ADDRESS,
-          hostName + ":" + port);
+          NetUtils.formatHostPort(hostName, port));
     } else {
       conf.set(YarnConfiguration.NM_WEBAPP_ADDRESS,
-          hostName + ":" + port);
+          NetUtils.formatHostPort(hostName, port));
     }
   }
 
@@ -326,22 +326,20 @@ public class WebAppUtils {
 
   public static String getResolvedAddress(InetSocketAddress address) {
     address = NetUtils.getConnectAddress(address);
-    StringBuilder sb = new StringBuilder();
     InetAddress resolved = address.getAddress();
+    String host;
     if (resolved == null || resolved.isAnyLocalAddress() ||
         resolved.isLoopbackAddress()) {
-      String lh = address.getHostName();
+      host = address.getHostName();
       try {
-        lh = InetAddress.getLocalHost().getCanonicalHostName();
+        host = InetAddress.getLocalHost().getCanonicalHostName();
       } catch (UnknownHostException e) {
         //Ignore and fallback.
       }
-      sb.append(lh);
     } else {
-      sb.append(address.getHostName());
+      host = address.getHostName();
     }
-    sb.append(":").append(address.getPort());
-    return sb.toString();
+    return NetUtils.formatHostPort(host, address.getPort());
   }
   
   /**
@@ -534,6 +532,22 @@ public class WebAppUtils {
    */
   public static String getHttpSchemePrefix(Configuration conf) {
     return YarnConfiguration.useHttps(conf) ? HTTPS_PREFIX : HTTP_PREFIX;
+  }
+
+  /**
+   * Prepend the configured http/https scheme to a {@code host:port} authority,
+   * bracketing a bare IPv6 literal host so the result is a valid RFC 3986 URL.
+   * A hostname / IPv4 / already-bracketed authority is unchanged apart from the
+   * scheme. {@code hostPort} must include a port.
+   *
+   * @param conf configuration.
+   * @param hostPort a {@code host:port} authority string.
+   * @return scheme-prefixed URL with bracketed IPv6 host if necessary.
+   */
+  public static String getHttpSchemePrefixedURL(Configuration conf, String hostPort) {
+    if (hostPort == null || hostPort.isEmpty()) { return hostPort; }
+    InetSocketAddress a = NetUtils.createSocketAddr(hostPort, -1, null, false, false);
+    return getHttpSchemePrefix(conf) + NetUtils.formatHostPort(a.getHostString(), a.getPort());
   }
 
   /**

@@ -1446,8 +1446,8 @@ public class ResourceManager extends CompositeService
       builder.withAttribute(WebAppProxy.PROXY_CA,
           rmContext.getProxyCAManager().getProxyCA());
       builder.withAttribute(WebAppProxy.FETCHER_ATTRIBUTE, fetcher);
-      String[] proxyParts = proxyHostAndPort.split(":");
-      builder.withAttribute(WebAppProxy.PROXY_HOST_ATTRIBUTE, proxyParts[0]);
+      builder.withAttribute(WebAppProxy.PROXY_HOST_ATTRIBUTE,
+          NetUtils.createSocketAddr(proxyHostAndPort, 0, null, false, false).getHostString());
     }
 
     WebAppContext uiWebAppContext = null;

@@ -121,7 +121,8 @@ public class NMWebAppFilter implements Filter {
             StringBuilder sb = new StringBuilder();
             sb.append(logServerUrl);
             sb.append("/");
-            sb.append(nmContext.getNodeId().toString());
+            sb.append(WebAppUtils.encodeHostPortForPathSegment(
+                nmContext.getNodeId().toString()));
             sb.append("/");
             sb.append(containerIdStr);
             sb.append("/");

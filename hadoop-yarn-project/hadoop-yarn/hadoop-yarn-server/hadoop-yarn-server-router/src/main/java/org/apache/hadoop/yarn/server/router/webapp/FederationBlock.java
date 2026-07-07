@@ -200,7 +200,7 @@ class FederationBlock extends RouterBlock {
     String herfWebAppAddress = "";
     if (webAppAddress != null && !webAppAddress.isEmpty()) {
       herfWebAppAddress =
-          WebAppUtils.getHttpSchemePrefix(this.router.getConfig()) + webAppAddress;
+          WebAppUtils.getHttpSchemePrefixedURL(this.router.getConfig(), webAppAddress);
     }
 
     // Prepare Capability

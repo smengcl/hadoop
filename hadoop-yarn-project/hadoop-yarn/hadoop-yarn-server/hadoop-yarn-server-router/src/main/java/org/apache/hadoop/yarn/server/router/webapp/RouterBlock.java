@@ -178,8 +178,8 @@ public abstract class RouterBlock extends HtmlBlock {
       if (subClusterInfo != null) {
         Client client = RouterWebServiceUtil.createJerseyClient(this.conf);
         // Call the RM interface to obtain schedule information
-        String webAppAddress =  WebAppUtils.getHttpSchemePrefix(this.conf) +
-            subClusterInfo.getRMWebServiceAddress();
+        String webAppAddress = WebAppUtils.getHttpSchemePrefixedURL(this.conf,
+            subClusterInfo.getRMWebServiceAddress());
         ClusterMetricsInfo metrics = RouterWebServiceUtil
             .genericForward(webAppAddress, null, ClusterMetricsInfo.class, HTTPMethods.GET,
             RMWSConsts.RM_WEB_SERVICE_PATH + RMWSConsts.METRICS, null, null,

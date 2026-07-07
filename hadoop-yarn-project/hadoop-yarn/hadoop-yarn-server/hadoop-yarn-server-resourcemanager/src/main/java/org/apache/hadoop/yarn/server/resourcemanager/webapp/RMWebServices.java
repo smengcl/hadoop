@@ -20,6 +20,7 @@ package org.apache.hadoop.yarn.server.resourcemanager.webapp;
 
 import java.io.IOException;
 import java.lang.reflect.UndeclaredThrowableException;
+import java.net.InetSocketAddress;
 import java.security.AccessControlException;
 import java.security.Principal;
 import java.security.PrivilegedExceptionAction;
@@ -64,6 +65,7 @@ import javax.ws.rs.core.Response.Status;
 import org.apache.commons.lang3.EnumUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.CommonConfigurationKeys;
+import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.http.JettyUtils;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.security.UserGroupInformation;
@@ -777,9 +779,17 @@ public class RMWebServices extends WebServices implements RMWebServiceProtocol {
         String hostName = nodeId;
         String portName = "";
         if (nodeId.contains(":")) {
-          int index = nodeId.indexOf(":");
-          hostName = nodeId.substring(0, index);
-          portName = nodeId.substring(index + 1);
+          try {
+            InetSocketAddress addr =
+                NetUtils.createSocketAddr(nodeId, -1, null, false, false);
+            hostName = addr.getHostString();
+            portName = String.valueOf(addr.getPort());
+          } catch (IllegalArgumentException ignored) {
+            // Unparseable authority (e.g. a bare IPv6 literal with no port);
+            // leave hostName=nodeId, portName="" so the loop below fails to
+            // match and the method returns the normal "Cannot find node
+            // manager" response rather than a 500.
+          }
         }
 
         boolean correctNodeId = false;

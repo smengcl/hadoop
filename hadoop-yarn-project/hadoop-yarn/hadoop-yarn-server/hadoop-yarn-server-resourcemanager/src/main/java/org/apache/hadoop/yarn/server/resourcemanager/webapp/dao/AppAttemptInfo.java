@@ -83,7 +83,8 @@ public class AppAttemptInfo {
             this.appAttemptState == RMAppAttemptState.KILLED) &&
             logServerUrl != null) {
           this.logsLink = PATH_JOINER.join(logServerUrl,
-               masterContainer.getNodeId().toString(),
+               WebAppUtils.encodeHostPortForPathSegment(
+                   masterContainer.getNodeId().toString()),
                masterContainer.getId().toString(),
                masterContainer.getId().toString(), user);
         } else {

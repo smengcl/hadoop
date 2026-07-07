@@ -85,7 +85,7 @@ public class NodeLabelsBlock extends RouterBlock {
         String herfWebAppAddress = "";
         if (webAddress != null && !webAddress.isEmpty()) {
           herfWebAppAddress =
-              WebAppUtils.getHttpSchemePrefix(this.router.getConfig()) + webAddress;
+              WebAppUtils.getHttpSchemePrefixedURL(this.router.getConfig(), webAddress);
           return getSubClusterNodeLabelsByWebAddress(herfWebAppAddress);
         }
       }

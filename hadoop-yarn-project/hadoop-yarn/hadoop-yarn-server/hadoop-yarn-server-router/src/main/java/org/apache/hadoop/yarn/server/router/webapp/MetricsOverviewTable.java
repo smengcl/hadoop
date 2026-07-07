@@ -272,8 +272,8 @@ public class MetricsOverviewTable extends RouterBlock {
       // We need to make sure subCluster is not null
       if (subcluster != null && subcluster.getSubClusterId() != null) {
         // Call the RM interface to obtain schedule information
-        String webAppAddress =  WebAppUtils.getHttpSchemePrefix(config) +
-            subcluster.getRMWebServiceAddress();
+        String webAppAddress = WebAppUtils.getHttpSchemePrefixedURL(config,
+            subcluster.getRMWebServiceAddress());
         SchedulerOverviewInfo schedulerOverviewInfo =
             getSchedulerOverviewInfo(webAppAddress, config, client);
 

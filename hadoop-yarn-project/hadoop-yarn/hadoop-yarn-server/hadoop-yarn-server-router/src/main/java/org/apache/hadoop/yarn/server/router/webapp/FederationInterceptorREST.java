@@ -319,7 +319,7 @@ public class FederationInterceptorREST extends AbstractRESTRequestInterceptor {
           interceptorClassName, e);
     }
 
-    String webAppAddressWithScheme = WebAppUtils.getHttpSchemePrefix(conf) + webAppAddress;
+    String webAppAddressWithScheme = WebAppUtils.getHttpSchemePrefixedURL(conf, webAppAddress);
     interceptorInstance.setWebAppAddress(webAppAddressWithScheme);
     interceptorInstance.setSubClusterId(subClusterId);
     interceptors.put(subClusterId, interceptorInstance);
@@ -357,7 +357,7 @@ public class FederationInterceptorREST extends AbstractRESTRequestInterceptor {
       SubClusterId subClusterId, String webAppAddress) {
     DefaultRequestInterceptorREST interceptor = getInterceptorForSubCluster(subClusterId);
     String webAppAddressWithScheme =
-        WebAppUtils.getHttpSchemePrefix(this.getConf()) + webAppAddress;
+        WebAppUtils.getHttpSchemePrefixedURL(this.getConf(), webAppAddress);
     if (interceptor == null || !webAppAddressWithScheme.equals(interceptor.getWebAppAddress())) {
       interceptor = createInterceptorForSubCluster(subClusterId, webAppAddress);
     }

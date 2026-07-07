@@ -199,6 +199,6 @@ public final class LogWebServiceUtils {
         .contains(WebAppUtils.HTTPS_PREFIX)) {
       return nmWebAddress;
     }
-    return WebAppUtils.getHttpSchemePrefix(yarnConf) + nmWebAddress;
+    return WebAppUtils.getHttpSchemePrefixedURL(yarnConf, nmWebAddress);
   }
 }
