@@ -662,8 +662,10 @@ public class RouterRpcServer extends AbstractService implements ClientProtocol,
       String namenodeId = HAUtil.getNameNodeId(conf, nsId);
       InetSocketAddress listenAddress = this.rpcServer.getListenerAddress();
       if (nsId == null || namenodeId == null) {
-        child = new Path(
-            listenAddress.getHostName() + "_" + listenAddress.getPort());
+        // Colons are not valid in an HDFS path component, so replace them in
+        // an IPv6 literal host before using it as the journal subdirectory.
+        String hostForPath = listenAddress.getHostName().replace(':', '.');
+        child = new Path(hostForPath + "_" + listenAddress.getPort());
       } else {
         child = new Path(nsId, namenodeId);
       }

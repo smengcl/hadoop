@@ -41,6 +41,7 @@ import org.apache.hadoop.hdfs.server.federation.store.protocol.GetNamenodeRegist
 import org.apache.hadoop.hdfs.server.federation.store.protocol.GetNamenodeRegistrationsResponse;
 import org.apache.hadoop.hdfs.server.federation.store.records.MembershipState;
 import org.apache.hadoop.security.UserGroupInformation;
+import org.apache.hadoop.thirdparty.com.google.common.net.HostAndPort;
 import org.apache.hadoop.util.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -127,7 +128,12 @@ public class RouterFsck {
     final String scheme = nn.getWebScheme();
     final String webAddress = nn.getWebAddress();
     final String args = getURLArguments(pmap);
-    final URL url = new URL(scheme + "://" + webAddress + "/fsck?" + args);
+    // Split host:port with HostAndPort (IPv6-safe, keeps the host verbatim
+    // with no DNS lookup) and use the four-arg URL constructor, which brackets
+    // a bare IPv6 host; concatenating "scheme://host:port" would break on IPv6.
+    final HostAndPort hostAndPort = HostAndPort.fromString(webAddress);
+    final URL url = new URL(scheme, hostAndPort.getHost(),
+        hostAndPort.getPortOrDefault(-1), "/fsck?" + args);
 
     // Connect to the Namenode and output
     final URLConnection conn = url.openConnection();

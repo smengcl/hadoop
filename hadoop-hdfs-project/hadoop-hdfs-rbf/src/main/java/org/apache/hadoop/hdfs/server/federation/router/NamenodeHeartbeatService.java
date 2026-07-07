@@ -205,14 +205,16 @@ public class NamenodeHeartbeatService extends PeriodicService {
 
     if (resolvedHost != null) {
       // Get the addresses from resolvedHost plus the configured ports.
-      rpcAddress = resolvedHost + ":"
-          + NetUtils.getPortFromHostPortString(rpcAddress);
-      serviceAddress = resolvedHost + ":"
-          + NetUtils.getPortFromHostPortString(serviceAddress);
-      lifelineAddress = resolvedHost + ":"
-          + NetUtils.getPortFromHostPortString(lifelineAddress);
-      webAddress = resolvedHost + ":"
-          + NetUtils.getPortFromHostPortString(webAddress);
+      // formatHostPort brackets resolvedHost when it is a bare IPv6 literal
+      // so the resulting host:port strings parse correctly downstream.
+      rpcAddress = NetUtils.formatHostPort(resolvedHost,
+          NetUtils.getPortFromHostPortString(rpcAddress));
+      serviceAddress = NetUtils.formatHostPort(resolvedHost,
+          NetUtils.getPortFromHostPortString(serviceAddress));
+      lifelineAddress = NetUtils.formatHostPort(resolvedHost,
+          NetUtils.getPortFromHostPortString(lifelineAddress));
+      webAddress = NetUtils.formatHostPort(resolvedHost,
+          NetUtils.getPortFromHostPortString(webAddress));
     }
 
     LOG.info("{} RPC address: {}", nnDesc, rpcAddress);
@@ -296,7 +298,7 @@ public class NamenodeHeartbeatService extends PeriodicService {
         }
         if (sockAddr != null) {
           InetAddress addr = sockAddr.getAddress();
-          ret = addr.getHostName() + ":" + sockAddr.getPort();
+          ret = NetUtils.formatHostPort(addr.getHostName(), sockAddr.getPort());
         }
       }
     }
@@ -349,7 +351,11 @@ public class NamenodeHeartbeatService extends PeriodicService {
     try {
       LOG.debug("Probing NN at service address: {}", serviceAddress);
 
-      URI serviceURI = new URI("hdfs://" + serviceAddress);
+      // Build the URI via the multi-arg constructor so an IPv6 literal host is
+      // bracketed (single-arg "hdfs://" + host:port rejects bare IPv6).
+      InetSocketAddress serviceAddr = NetUtils.createSocketAddr(serviceAddress);
+      URI serviceURI = new URI("hdfs", null, serviceAddr.getHostName(),
+          serviceAddr.getPort(), null, null, null);
 
       // Read the filesystem info from RPC (required)
       updateNameSpaceInfoParameters(serviceURI, report);

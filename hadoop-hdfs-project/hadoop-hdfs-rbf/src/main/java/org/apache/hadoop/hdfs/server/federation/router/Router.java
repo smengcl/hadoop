@@ -53,6 +53,7 @@ import org.apache.hadoop.metrics2.lib.DefaultMetricsSystem;
 import org.apache.hadoop.metrics2.source.JvmMetrics;
 import org.apache.hadoop.net.DomainNameResolver;
 import org.apache.hadoop.net.DomainNameResolverFactory;
+import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.security.SecurityUtil;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.service.CompositeService;
@@ -435,7 +436,10 @@ public class Router extends CompositeService implements
     if (this.rpcAddress != null) {
       try {
         String hostname = InetAddress.getLocalHost().getHostName();
-        setRouterId(hostname + ":" + this.rpcAddress.getPort());
+        // formatHostPort brackets a bare IPv6 literal so the router id is a
+        // valid host:port (it is echoed into WebHDFS redirect query strings).
+        setRouterId(
+            NetUtils.formatHostPort(hostname, this.rpcAddress.getPort()));
       } catch (UnknownHostException ex) {
         LOG.error("Cannot set unique router ID, address not resolvable {}",
             this.rpcAddress);

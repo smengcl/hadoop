@@ -704,7 +704,8 @@ public class RBFMetrics implements RouterMBean, FederationMBean {
       try {
         String hostname = InetAddress.getLocalHost().getHostName();
         int port = address.getPort();
-        return hostname + ":" + port;
+        // formatHostPort brackets a bare IPv6 literal for the reported metric.
+        return NetUtils.formatHostPort(hostname, port);
       } catch (UnknownHostException ignored) { }
     }
     return "Unknown";

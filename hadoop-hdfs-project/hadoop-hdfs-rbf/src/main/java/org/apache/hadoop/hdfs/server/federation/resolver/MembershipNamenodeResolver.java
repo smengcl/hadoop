@@ -163,7 +163,10 @@ public class MembershipNamenodeResolver
     // Temporarily update our cache, it will be overwritten on the next update.
     try {
       MembershipState partial = MembershipState.newInstance();
-      String rpcAddress = address.getHostName() + ":" + address.getPort();
+      // formatHostPort brackets a bare IPv6 literal so this lookup key matches
+      // the rpcAddress stored in the membership records.
+      String rpcAddress =
+          NetUtils.formatHostPort(address.getHostName(), address.getPort());
       partial.setRpcAddress(rpcAddress);
       partial.setNameserviceId(nsId);
 

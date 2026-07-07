@@ -126,7 +126,13 @@ public final class StateStoreUtils {
       return "";
     }
     String hostName = address.getHostName();
-    if (hostName.equals("0.0.0.0")) {
+    // Replace the IPv4 (0.0.0.0) or IPv6 (:: / 0:0:0:0:0:0:0:0) wildcard with a
+    // routable name. The address may be unresolved, so also match by string.
+    boolean isWildcard = hostName.equals("0.0.0.0")
+        || hostName.equals("::") || hostName.equals("0:0:0:0:0:0:0:0")
+        || (address.getAddress() != null
+            && address.getAddress().isAnyLocalAddress());
+    if (isWildcard) {
       try {
         hostName = InetAddress.getLocalHost().getHostName();
       } catch (UnknownHostException e) {
@@ -134,7 +140,9 @@ public final class StateStoreUtils {
         return "";
       }
     }
-    return hostName + ":" + address.getPort();
+    // formatHostPort brackets a bare IPv6 literal so the stored host:port
+    // string parses correctly when read back.
+    return NetUtils.formatHostPort(hostName, address.getPort());
   }
 
   /**
@@ -149,7 +157,9 @@ public final class StateStoreUtils {
     }
     address = NetUtils.getConnectAddress(address);
     InetAddress inet = address.getAddress();
-    return inet.getHostAddress() + ":" + address.getPort();
+    // formatHostPort brackets a bare IPv6 literal so the stored ip:port string
+    // parses correctly when read back.
+    return NetUtils.formatHostPort(inet.getHostAddress(), address.getPort());
   }
 
 }

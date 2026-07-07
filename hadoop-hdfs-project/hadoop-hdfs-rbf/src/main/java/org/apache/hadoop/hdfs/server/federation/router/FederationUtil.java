@@ -42,6 +42,7 @@ import org.apache.hadoop.hdfs.server.federation.store.StateStoreService;
 import org.apache.hadoop.hdfs.web.URLConnectionFactory;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.security.token.delegation.AbstractDelegationTokenSecretManager;
+import org.apache.hadoop.thirdparty.com.google.common.net.HostAndPort;
 import org.apache.hadoop.util.VersionInfo;
 import org.codehaus.jettison.json.JSONArray;
 import org.codehaus.jettison.json.JSONException;
@@ -75,14 +76,13 @@ public final class FederationUtil {
     JSONArray ret = null;
     BufferedReader reader = null;
     try {
-      String host = webAddress;
-      int port = -1;
-      if (webAddress.indexOf(":") > 0) {
-        String[] webAddressSplit = webAddress.split(":");
-        host = webAddressSplit[0];
-        port = Integer.parseInt(webAddressSplit[1]);
-      }
-      URL jmxURL = new URL(scheme, host, port, "/jmx?qry=" + beanQuery);
+      // Split host:port with HostAndPort so an IPv6 literal (which contains
+      // colons) is not mangled by a naive split(":"). It keeps the host
+      // verbatim (no DNS lookup) and tolerates a missing port; the four-arg
+      // URL constructor brackets a bare IPv6 host in the resulting URL.
+      HostAndPort hostAndPort = HostAndPort.fromString(webAddress);
+      URL jmxURL = new URL(scheme, hostAndPort.getHost(),
+          hostAndPort.getPortOrDefault(-1), "/jmx?qry=" + beanQuery);
       LOG.debug("JMX URL: {}", jmxURL);
       // Create a URL connection
       URLConnection conn = connectionFactory.openConnection(
