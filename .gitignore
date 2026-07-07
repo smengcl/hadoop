@@ -63,3 +63,4 @@ report.html
 
 .mvn/wrapper/maven-wrapper.jar
 hadoop-dist/src/main/compose/hadoop-ipv6/hadoop-*-SNAPSHOT/
+hadoop-dist/src/main/compose/hadoop-ipv6-secure/hadoop-*-SNAPSHOT/

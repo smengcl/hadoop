@@ -1,0 +1,144 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# KERBEROS/SASL secured IPv6-only Hadoop verification harness.
+#
+# An MIT KDC issues host-based service keytabs into a shared volume; the
+# NameNode and DataNodes authenticate from that keytab and negotiate SASL on
+# both the RPC and data-transfer planes, all over IPv6 (hostname-addressed,
+# AAAA-resolved). A distinct ULA subnet (fd00:dead:beef:1::/64) lets this run
+# alongside the non-secure hadoop-ipv6 harness.
+#
+# Build prerequisite (repo root): mvn -DskipTests -Pdist package, then
+#   cp -r ../../../target/hadoop-3.6.0-SNAPSHOT .
+#   docker compose build && docker compose up -d
+#   docker compose exec namenode /opt/hadoop/smoketest-secure.sh
+
+services:
+  kdc:
+    build:
+      context: .
+      dockerfile: Dockerfile.kdc
+    image: hadoop-ipv6-secure-kdc:dev
+    hostname: kdc
+    networks:
+      v6net:
+        ipv6_address: fd00:dead:beef:1::5
+    volumes:
+      - keytabs:/keytabs
+
+  namenode:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: hadoop-ipv6-secure:dev
+    hostname: namenode
+    command: ["hdfs", "namenode"]
+    depends_on:
+      - kdc
+    # Host port differs from the non-secure hadoop-ipv6 harness (9870) so both
+    # can run at once; the secure smoke test runs inside the container anyway.
+    ports:
+      - "19870:9870"
+    networks:
+      v6net:
+        ipv6_address: fd00:dead:beef:1::10
+    volumes:
+      - nn-data:/data/dfs/name
+      - keytabs:/keytabs:ro
+
+  datanode-1:
+    image: hadoop-ipv6-secure:dev
+    hostname: datanode-1
+    command: ["hdfs", "datanode"]
+    depends_on:
+      - namenode
+    networks:
+      v6net:
+        ipv6_address: fd00:dead:beef:1::21
+    volumes:
+      - dn1-data:/data/dfs/data
+      - keytabs:/keytabs:ro
+
+  datanode-2:
+    image: hadoop-ipv6-secure:dev
+    hostname: datanode-2
+    command: ["hdfs", "datanode"]
+    depends_on:
+      - namenode
+    networks:
+      v6net:
+        ipv6_address: fd00:dead:beef:1::22
+    volumes:
+      - dn2-data:/data/dfs/data
+      - keytabs:/keytabs:ro
+
+  resourcemanager:
+    image: hadoop-ipv6-secure:dev
+    hostname: resourcemanager
+    command: ["yarn", "resourcemanager"]
+    depends_on:
+      - namenode
+    # Host port differs from the non-secure harness (8088) so both can run.
+    ports:
+      - "18088:8088"
+    networks:
+      v6net:
+        ipv6_address: fd00:dead:beef:1::30
+    volumes:
+      - keytabs:/keytabs:ro
+
+  nodemanager-1:
+    image: hadoop-ipv6-secure:dev
+    hostname: nodemanager-1
+    command: ["yarn", "nodemanager"]
+    depends_on:
+      - resourcemanager
+    networks:
+      v6net:
+        ipv6_address: fd00:dead:beef:1::41
+    volumes:
+      - keytabs:/keytabs:ro
+
+  historyserver:
+    image: hadoop-ipv6-secure:dev
+    hostname: historyserver
+    command: ["mapred", "historyserver"]
+    depends_on:
+      - namenode
+      - resourcemanager
+    # Host port differs from the non-secure harness (19888) so both can run.
+    ports:
+      - "29888:19888"
+    networks:
+      v6net:
+        ipv6_address: fd00:dead:beef:1::50
+    volumes:
+      - keytabs:/keytabs:ro
+
+networks:
+  v6net:
+    driver: bridge
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: fd00:dead:beef:1::/64
+        - subnet: 169.254.99.32/27
+
+volumes:
+  nn-data:
+  dn1-data:
+  dn2-data:
+  keytabs:

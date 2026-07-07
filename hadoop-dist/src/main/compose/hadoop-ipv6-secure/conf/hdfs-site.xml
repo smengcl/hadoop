@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+-->
+<configuration>
+  <property>
+    <name>dfs.replication</name>
+    <value>2</value>
+  </property>
+  <property>
+    <name>dfs.namenode.name.dir</name>
+    <value>/data/dfs/name</value>
+  </property>
+  <property>
+    <name>dfs.datanode.data.dir</name>
+    <value>/data/dfs/data</value>
+  </property>
+
+  <!-- Bind on the IPv6 wildcard; advertise via forward-resolvable hostnames
+       (Kerberos principals are host-based, so addressing is hostname-driven
+       and AAAA resolution is the source of truth). -->
+  <property>
+    <name>dfs.namenode.rpc-bind-host</name>
+    <value>::</value>
+  </property>
+  <property>
+    <name>dfs.namenode.http-bind-host</name>
+    <value>::</value>
+  </property>
+  <property>
+    <name>dfs.namenode.rpc-address</name>
+    <value>namenode:8020</value>
+  </property>
+  <property>
+    <name>dfs.namenode.http-address</name>
+    <value>namenode:9870</value>
+  </property>
+  <property>
+    <name>dfs.datanode.address</name>
+    <value>[::]:9866</value>
+  </property>
+  <property>
+    <name>dfs.datanode.http.address</name>
+    <value>[::]:9864</value>
+  </property>
+  <property>
+    <name>dfs.datanode.ipc.address</name>
+    <value>[::]:9867</value>
+  </property>
+
+  <!-- ==== Kerberos / SASL security ==== -->
+  <property>
+    <name>dfs.block.access.token.enable</name>
+    <value>true</value>
+  </property>
+
+  <property>
+    <name>dfs.namenode.kerberos.principal</name>
+    <value>hdfs/_HOST@IPV6.TEST</value>
+  </property>
+  <property>
+    <name>dfs.namenode.keytab.file</name>
+    <value>/keytabs/hadoop.keytab</value>
+  </property>
+  <property>
+    <name>dfs.namenode.kerberos.internal.spnego.principal</name>
+    <value>HTTP/_HOST@IPV6.TEST</value>
+  </property>
+
+  <property>
+    <name>dfs.datanode.kerberos.principal</name>
+    <value>hdfs/_HOST@IPV6.TEST</value>
+  </property>
+  <property>
+    <name>dfs.datanode.keytab.file</name>
+    <value>/keytabs/hadoop.keytab</value>
+  </property>
+
+  <property>
+    <name>dfs.web.authentication.kerberos.principal</name>
+    <value>HTTP/_HOST@IPV6.TEST</value>
+  </property>
+  <property>
+    <name>dfs.web.authentication.kerberos.keytab</name>
+    <value>/keytabs/hadoop.keytab</value>
+  </property>
+
+  <!-- SASL data transfer: lets the DataNode run on an unprivileged port
+       without jsvc/root. This is the IPv6-sensitive path we want to exercise:
+       DataTransferSaslUtil.getPeerAddress parses the peer's bracketed IPv6
+       address during the SASL handshake. -->
+  <property>
+    <name>dfs.data.transfer.protection</name>
+    <value>authentication</value>
+  </property>
+
+  <!-- Keep web on plain HTTP for phase 1 (no TLS keystores); the RPC and
+       data-transfer planes are still fully Kerberos/SASL protected. -->
+  <property>
+    <name>dfs.http.policy</name>
+    <value>HTTP_ONLY</value>
+  </property>
+  <!-- With SASL data transfer enabled, secure-DN startup normally also
+       demands either privileged ports (<1024, i.e. jsvc/root) or HTTPS_ONLY.
+       This test harness uses neither, so waive that port/HTTPS requirement.
+       SASL data transfer itself stays fully active (dfs.data.transfer.protection
+       above), which is the IPv6 path we want to exercise. -->
+  <property>
+    <name>ignore.secure.ports.for.testing</name>
+    <value>true</value>
+  </property>
+
+  <!-- Authorization is tested elsewhere; here we focus on authentication and
+       SASL over IPv6, so disable permission checks to reduce noise. -->
+  <property>
+    <name>dfs.permissions.enabled</name>
+    <value>false</value>
+  </property>
+</configuration>

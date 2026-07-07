@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+-->
+<configuration>
+  <property>
+    <name>fs.defaultFS</name>
+    <value>hdfs://namenode:8020</value>
+  </property>
+
+  <property>
+    <name>hadoop.security.authentication</name>
+    <value>kerberos</value>
+  </property>
+  <!-- Authentication (Kerberos) is what we exercise over IPv6. Service-level
+       authorization is left OFF here because its per-protocol client-principal
+       ACL check reverse-resolves the peer IP to build the expected principal,
+       and Docker's embedded DNS is asymmetric: forward "datanode-1" -> fd00::21
+       but reverse fd00::21 -> "hadoop-ipv6-secure-datanode-1-1.<proj>_v6net".
+       That forward/reverse mismatch (identical on IPv4) would reject the DN's
+       hdfs/datanode-1 principal. A real deployment with consistent PTR records
+       can enable this; it is not an IPv6 concern. -->
+  <property>
+    <name>hadoop.security.authorization</name>
+    <value>false</value>
+  </property>
+  <!-- Exercise the SASL-negotiated RPC path over IPv6. -->
+  <property>
+    <name>hadoop.rpc.protection</name>
+    <value>authentication</value>
+  </property>
+
+  <!-- Map every service/host@IPV6.TEST and user@IPV6.TEST principal to its
+       first component (hdfs, yarn, mapred, HTTP, ...). So hdfs/namenode maps
+       to the "hdfs" superuser. -->
+  <property>
+    <name>hadoop.security.auth_to_local</name>
+    <value>
+      RULE:[2:$1@$0](.*@IPV6\.TEST)s/@.*//
+      RULE:[1:$1@$0](.*@IPV6\.TEST)s/@.*//
+      DEFAULT
+    </value>
+  </property>
+
+  <property>
+    <name>hadoop.tmp.dir</name>
+    <value>/data/tmp</value>
+  </property>
+</configuration>

@@ -1,0 +1,83 @@
+<?xml version="1.0"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+-->
+<configuration>
+  <property>
+    <name>mapreduce.framework.name</name>
+    <value>yarn</value>
+  </property>
+
+  <!-- The AM and task containers need HADOOP_MAPRED_HOME to locate the
+       MapReduce jars on the NodeManager. -->
+  <property>
+    <name>yarn.app.mapreduce.am.env</name>
+    <value>HADOOP_MAPRED_HOME=/opt/hadoop</value>
+  </property>
+
+  <!-- The Hadoop daemons prefer IPv6 via the image's HADOOP_OPTS, but YARN
+       builds a fresh JVM command line for the AM and task containers that does
+       not inherit it. The Docker bridge is forced to carry a link-local IPv4
+       subnet alongside IPv6, and the JVM prefers IPv4 by default, so without
+       this an AM would resolve "namenode" to its 169.254.x address. Under
+       Kerberos that breaks HDFS delegation-token selection: the token's
+       service id is the numeric IPv6 endpoint (use_ip=true), which no longer
+       matches an IPv4-resolved connection, and auth falls through to KERBEROS
+       (no TGT in a container) and fails. Pin IPv6 preference on the admin
+       (framework) opts so it applies to every AM and task JVM. -->
+  <property>
+    <name>yarn.app.mapreduce.am.admin-command-opts</name>
+    <value>-Dhadoop.metrics.log.level=WARN -Djava.net.preferIPv4Stack=false -Djava.net.preferIPv6Addresses=true</value>
+  </property>
+  <property>
+    <name>mapreduce.admin.map.child.java.opts</name>
+    <value>-Dhadoop.metrics.log.level=WARN -Djava.net.preferIPv4Stack=false -Djava.net.preferIPv6Addresses=true</value>
+  </property>
+  <property>
+    <name>mapreduce.admin.reduce.child.java.opts</name>
+    <value>-Dhadoop.metrics.log.level=WARN -Djava.net.preferIPv4Stack=false -Djava.net.preferIPv6Addresses=true</value>
+  </property>
+  <property>
+    <name>mapreduce.map.env</name>
+    <value>HADOOP_MAPRED_HOME=/opt/hadoop</value>
+  </property>
+  <property>
+    <name>mapreduce.reduce.env</name>
+    <value>HADOOP_MAPRED_HOME=/opt/hadoop</value>
+  </property>
+
+  <!-- ==== JobHistory server (Kerberos) ==== -->
+  <property>
+    <name>mapreduce.jobhistory.address</name>
+    <value>historyserver:10020</value>
+  </property>
+  <property>
+    <name>mapreduce.jobhistory.webapp.address</name>
+    <value>historyserver:19888</value>
+  </property>
+  <property>
+    <name>mapreduce.jobhistory.bind-host</name>
+    <value>::</value>
+  </property>
+  <property>
+    <name>mapreduce.jobhistory.principal</name>
+    <value>mapred/_HOST@IPV6.TEST</value>
+  </property>
+  <property>
+    <name>mapreduce.jobhistory.keytab</name>
+    <value>/keytabs/hadoop.keytab</value>
+  </property>
+  <!-- Accept the JobHistory server's advertised principal by glob rather than
+       reverse-DNS equality (see the note in yarn-site.xml). -->
+  <property>
+    <name>mapreduce.jobhistory.principal.pattern</name>
+    <value>*</value>
+  </property>
+</configuration>
