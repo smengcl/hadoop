@@ -156,7 +156,56 @@ public class TestNfsExports {
     Assertions.assertEquals(AccessPrivilege.READ_ONLY,
         matcher.getAccessPrivilege(address1, hostname2));
   }
-  
+
+  private final String ipv6Address1 = "fd00:0:0:0:0:0:0:1";
+  private final String ipv6Address2 = "fd00:0:0:0:0:0:0:2";
+  private final String ipv6Hostname = "host.ipv6.example";
+
+  @Test
+  public void testExactIPv6RO() {
+    // rule is compressed; client address is reported expanded and must match
+    NfsExports matcher =
+        new NfsExports(CacheSize, ExpirationPeriod, "fd00::1");
+    Assertions.assertEquals(AccessPrivilege.READ_ONLY,
+        matcher.getAccessPrivilege(ipv6Address1, ipv6Hostname));
+    Assertions.assertEquals(AccessPrivilege.NONE,
+        matcher.getAccessPrivilege(ipv6Address2, ipv6Hostname));
+  }
+
+  @Test
+  public void testExactBracketedIPv6RW() {
+    NfsExports matcher =
+        new NfsExports(CacheSize, ExpirationPeriod, "[fd00::1] rw");
+    Assertions.assertEquals(AccessPrivilege.READ_WRITE,
+        matcher.getAccessPrivilege("fd00::1", ipv6Hostname));
+    Assertions.assertEquals(AccessPrivilege.READ_WRITE,
+        matcher.getAccessPrivilege(ipv6Address1, ipv6Hostname));
+  }
+
+  @Test
+  public void testIPv6CidrRW() {
+    NfsExports matcher =
+        new NfsExports(CacheSize, ExpirationPeriod, "fd00::/64 rw");
+    Assertions.assertEquals(AccessPrivilege.READ_WRITE,
+        matcher.getAccessPrivilege("fd00::abcd", ipv6Hostname));
+    // different /64 prefix must not match
+    Assertions.assertEquals(AccessPrivilege.NONE,
+        matcher.getAccessPrivilege("fd01::1", ipv6Hostname));
+  }
+
+  @Test
+  public void testIPv4CidrDeniesIPv6ClientWithoutCrash() {
+    // Regression: SubnetUtils.isInRange() previously threw for an IPv6
+    // address, crashing the NFS connection. An IPv6 client is simply not in
+    // an IPv4 subnet, and IPv4 clients still match.
+    NfsExports matcher =
+        new NfsExports(CacheSize, ExpirationPeriod, "192.168.0.0/24 rw");
+    Assertions.assertEquals(AccessPrivilege.NONE,
+        matcher.getAccessPrivilege(ipv6Address1, ipv6Hostname));
+    Assertions.assertEquals(AccessPrivilege.READ_WRITE,
+        matcher.getAccessPrivilege("192.168.0.5", hostname1));
+  }
+
   @Test
   public void testRegexGrouping() {
     NfsExports matcher = new NfsExports(CacheSize, ExpirationPeriod,

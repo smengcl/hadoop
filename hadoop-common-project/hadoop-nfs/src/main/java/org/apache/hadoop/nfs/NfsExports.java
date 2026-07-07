@@ -17,6 +17,7 @@
  */
 package org.apache.hadoop.nfs;
 
+import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.List;
@@ -27,6 +28,7 @@ import org.apache.commons.net.util.SubnetUtils.SubnetInfo;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.CommonConfigurationKeys;
 import org.apache.hadoop.nfs.nfs3.Nfs3Constant;
+import org.apache.hadoop.thirdparty.com.google.common.net.InetAddresses;
 import org.apache.hadoop.util.LightWeightCache;
 import org.apache.hadoop.util.LightWeightGSet;
 import org.apache.hadoop.util.LightWeightGSet.LinkedElement;
@@ -66,8 +68,9 @@ public class NfsExports {
   
   public static final Logger LOG = LoggerFactory.getLogger(NfsExports.class);
   
-  // only support IPv4 now
-  private static final String IP_ADDRESS = 
+  // IPv4 dotted-quad. IPv6 literals and IPv6 CIDRs are handled separately in
+  // getMatch() via Guava InetAddresses, not by these regexes.
+  private static final String IP_ADDRESS =
       "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})";
   private static final String SLASH_FORMAT_SHORT = IP_ADDRESS + "/(\\d{1,3})";
   private static final String SLASH_FORMAT_LONG = IP_ADDRESS + "/" + IP_ADDRESS;
@@ -257,6 +260,13 @@ public class NfsExports {
     
     @Override
     public boolean isIncluded(String address, String hostname) {
+      // SubnetUtils is IPv4-only: passing it an IPv6 address string throws
+      // IllegalArgumentException, which would propagate up and crash the NFS
+      // connection for every IPv6 client whenever an IPv4 CIDR rule exists.
+      // An IPv6 client can never be inside an IPv4 subnet, so short-circuit.
+      if (address == null || address.indexOf(':') >= 0) {
+        return false;
+      }
       if(subnetInfo.isInRange(address)) {
         if(LOG.isDebugEnabled()) {
           LOG.debug("CIDRNMatcher low = " + subnetInfo.getLowAddress() +
@@ -284,12 +294,17 @@ public class NfsExports {
    */
   private static class ExactMatch extends Match {
     private final String ipOrHost;
-    
+    // Canonical (RFC 5952) form of ipOrHost when it is an IP literal, else
+    // null. Lets an IPv6 rule written compressed ("fd00::1") match the
+    // runtime address reported expanded ("fd00:0:0:0:0:0:0:1").
+    private final String canonicalIp;
+
     private ExactMatch(AccessPrivilege accessPrivilege, String ipOrHost) {
       super(accessPrivilege);
       this.ipOrHost = ipOrHost;
+      this.canonicalIp = canonicalizeIp(ipOrHost);
     }
-    
+
     @Override
     public boolean isIncluded(String address, String hostname) {
       if(ipOrHost.equalsIgnoreCase(address) ||
@@ -299,6 +314,16 @@ public class NfsExports {
               "'" + address + "', '" + hostname + "'");
         }
         return true;
+      }
+      if (canonicalIp != null) {
+        String canonicalAddr = canonicalizeIp(address);
+        if (canonicalIp.equals(canonicalAddr)) {
+          if (LOG.isDebugEnabled()) {
+            LOG.debug("ExactMatcher '" + ipOrHost + "', allowing client " +
+                "'" + address + "', '" + hostname + "' (canonical IPv6 match)");
+          }
+          return true;
+        }
       }
       if(LOG.isDebugEnabled()) {
         LOG.debug("ExactMatcher '" + ipOrHost + "', denying client " +
@@ -348,11 +373,95 @@ public class NfsExports {
   }
 
   /**
+   * Matcher using an IPv6 CIDR (e.g. "fd00::/64") for client host matching.
+   * commons-net SubnetUtils is IPv4-only, so IPv6 prefix matching is done
+   * here by comparing the leading prefixLen bits of the client address.
+   */
+  private static class Ipv6CIDRMatch extends Match {
+    private final byte[] network;
+    private final int prefixLen;
+    private final String hostGroup;
+
+    private Ipv6CIDRMatch(AccessPrivilege accessPrivilege, String cidr) {
+      super(accessPrivilege);
+      this.hostGroup = cidr;
+      int slash = cidr.indexOf('/');
+      String ipPart = cidr.substring(0, slash);
+      int p;
+      try {
+        p = Integer.parseInt(cidr.substring(slash + 1));
+      } catch (NumberFormatException e) {
+        throw new IllegalArgumentException(
+            "Invalid IPv6 CIDR prefix length in '" + cidr + "'", e);
+      }
+      if (p < 0 || p > 128) {
+        throw new IllegalArgumentException(
+            "IPv6 CIDR prefix length out of range in '" + cidr + "'");
+      }
+      InetAddress net = InetAddresses.forString(ipPart);
+      if (!(net instanceof Inet6Address)) {
+        throw new IllegalArgumentException("Not an IPv6 CIDR: '" + cidr + "'");
+      }
+      this.prefixLen = p;
+      this.network = net.getAddress();
+    }
+
+    @Override
+    public boolean isIncluded(String address, String hostname) {
+      // isInetAddress rejects scope-id / non-literal forms, so this is safe
+      // and never throws for an arbitrary client address string.
+      if (address == null || !InetAddresses.isInetAddress(address)) {
+        return false;
+      }
+      InetAddress a = InetAddresses.forString(address);
+      if (!(a instanceof Inet6Address)) {
+        return false;
+      }
+      byte[] ab = a.getAddress();
+      int fullBytes = prefixLen / 8;
+      int remBits = prefixLen % 8;
+      for (int i = 0; i < fullBytes; i++) {
+        if (ab[i] != network[i]) {
+          return false;
+        }
+      }
+      if (remBits > 0) {
+        int mask = (0xFF << (8 - remBits)) & 0xFF;
+        if ((ab[fullBytes] & mask) != (network[fullBytes] & mask)) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    @Override
+    public String getHostGroup() {
+      return hostGroup;
+    }
+  }
+
+  /**
+   * @return the RFC 5952 canonical form of an IP literal, or null if the
+   * argument is not an IP literal (e.g. a hostname or a scoped address).
+   */
+  private static String canonicalizeIp(String s) {
+    if (s == null || !InetAddresses.isInetAddress(s)) {
+      return null;
+    }
+    return InetAddresses.toAddrString(InetAddresses.forString(s));
+  }
+
+  /** @return true if s is a bare (unscoped) IPv6 literal. */
+  private static boolean isIpv6Literal(String s) {
+    return s.indexOf(':') >= 0 && InetAddresses.isInetAddress(s);
+  }
+
+  /**
    * Loading a matcher from a string. The default access privilege is read-only.
    * The string contains 1 or 2 parts, separated by whitespace characters, where
-   * the first part specifies the client hosts, and the second part (if 
+   * the first part specifies the client hosts, and the second part (if
    * existent) specifies the access privilege of the client hosts. I.e.,
-   * 
+   *
    * "client-hosts [access-privilege]"
    */
   private static Match getMatch(String line) {
@@ -374,11 +483,33 @@ public class NfsExports {
       throw new IllegalArgumentException("Incorrectly formatted line '" + line
           + "'");
     }
+    // Strip brackets an operator may have written around an IPv6 literal
+    // (e.g. "[fd00::1]"); the runtime client address is unbracketed.
+    String v6 = host;
+    if (v6.length() > 1 && v6.charAt(0) == '[' && v6.endsWith("]")) {
+      v6 = v6.substring(1, v6.length() - 1);
+    }
+    int v6Slash = v6.indexOf('/');
     if (host.equals("*")) {
       if (LOG.isDebugEnabled()) {
         LOG.debug("Using match all for '" + host + "' and " + privilege);
       }
       return new AnonymousMatch(privilege);
+    } else if (v6Slash > 0 && isIpv6Literal(v6.substring(0, v6Slash))) {
+      // IPv6 CIDR, e.g. "fd00::/64". Checked before the IPv4 CIDR / regex /
+      // hostname branches because a bare IPv6 literal contains ':' (rejected
+      // by HOSTNAME_FORMAT) and a bracketed one contains '[' (would be taken
+      // for a regex).
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("Using IPv6 CIDR match for '" + v6 + "' and " + privilege);
+      }
+      return new Ipv6CIDRMatch(privilege, v6);
+    } else if (isIpv6Literal(v6)) {
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("Using exact match for IPv6 literal '" + v6 + "' and "
+            + privilege);
+      }
+      return new ExactMatch(privilege, canonicalizeIp(v6));
     } else if (CIDR_FORMAT_SHORT.matcher(host).matches()) {
       if (LOG.isDebugEnabled()) {
         LOG.debug("Using CIDR match for '" + host + "' and " + privilege);
