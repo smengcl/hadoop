@@ -113,6 +113,7 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.net.InetSocketAddress;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -1950,8 +1951,29 @@ public class NameNode extends ReconfigurableBase implements
     
     // If the RPC address is set use it to (re-)configure the default FS
     if (conf.get(DFS_NAMENODE_RPC_ADDRESS_KEY) != null) {
-      URI defaultUri = URI.create(HdfsConstants.HDFS_URI_SCHEME + "://"
-          + conf.get(DFS_NAMENODE_RPC_ADDRESS_KEY));
+      String rpcAddr = conf.get(DFS_NAMENODE_RPC_ADDRESS_KEY);
+      URI defaultUri = URI.create(HdfsConstants.HDFS_URI_SCHEME + "://" + rpcAddr);
+      if (defaultUri.getHost() == null && defaultUri.getAuthority() != null) {
+        // A bare (unbracketed) IPv6 literal - a form NetUtils.createSocketAddr
+        // accepts - yields a URI with a registry-based authority and a null
+        // host. Reparse and rebuild via the multi-arg constructor, which
+        // brackets the host; the port is preserved so the default FS matches
+        // the configured RPC endpoint. (IPv4, hostnames, and already-bracketed
+        // IPv6 have a non-null host and are left untouched.)
+        InetSocketAddress addr = NetUtils.createSocketAddr(rpcAddr);
+        // Use the numeric address (never a reverse-DNS name) when resolved so
+        // an operator-configured IPv6 literal is not silently replaced by a
+        // hostname; fall back to the literal host string when unresolved.
+        String host = addr.isUnresolved()
+            ? addr.getHostName() : addr.getAddress().getHostAddress();
+        try {
+          defaultUri = new URI(HdfsConstants.HDFS_URI_SCHEME, null,
+              host, addr.getPort(), null, null, null);
+        } catch (URISyntaxException ex) {
+          throw new IllegalArgumentException(
+              "Invalid NameNode RPC address " + rpcAddr, ex);
+        }
+      }
       conf.set(FS_DEFAULT_NAME_KEY, defaultUri.toString());
       LOG.debug("Setting {} to {}", FS_DEFAULT_NAME_KEY, defaultUri);
     }

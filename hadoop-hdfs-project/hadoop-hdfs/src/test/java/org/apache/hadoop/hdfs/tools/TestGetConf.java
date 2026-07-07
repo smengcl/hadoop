@@ -319,6 +319,26 @@ public class TestGetConf {
   }
 
   /**
+   * "getconf -nnRpcAddresses" must bracket an IPv6 NameNode RPC address so the
+   * printed host:port can be split into host and port unambiguously by the
+   * scripts that consume this output.
+   */
+  @Test
+  @Timeout(value = 10)
+  public void testGetConfNnRpcAddressesIPv6() throws Exception {
+    HdfsConfiguration conf = new HdfsConfiguration(false);
+    conf.set(DFS_NAMENODE_RPC_ADDRESS_KEY, "[fd00:dead:beef::10]:8021");
+    String out = runTool(conf,
+        new String[] {Command.NNRPCADDRESSES.getName()}, true).trim();
+    assertTrue(out.startsWith("["),
+        "IPv6 nnRpcAddresses output must be bracketed, got: " + out);
+    InetSocketAddress isa = NetUtils.createSocketAddr(out);
+    assertEquals(8021, isa.getPort());
+    assertEquals(NetUtils.createSocketAddr("[fd00:dead:beef::10]:8021")
+        .getAddress(), isa.getAddress());
+  }
+
+  /**
    * Tests to make sure the returned addresses are correct in case of federation
    * of setup.
    */
