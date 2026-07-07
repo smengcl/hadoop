@@ -93,6 +93,82 @@ check "wordcount job submit + complete" \
 check "wordcount output (hello=2)" \
     bash -c "hdfs dfs -cat /smoke/wcout/part-r-00000 | grep -E '^hello[[:space:]]+2$'"
 
+# --- Expanded coverage (HADOOP-XXXXX-F19) --------------------------------
+# Each of the following exercises an additional HDFS/YARN operation over the
+# IPv6-only data and RPC paths.
+
+echo "[smoketest] === HDFS append (reopens the write pipeline to the DN) ==="
+hdfs dfs -rm -f -skipTrash /smoke/append.txt 2>/dev/null || true
+check "append: initial put" \
+    bash -c "printf 'line-one\n' | hdfs dfs -put -f - /smoke/append.txt"
+check "append: appendToFile over IPv6 pipeline" \
+    bash -c "printf 'line-two\n' | hdfs dfs -appendToFile - /smoke/append.txt"
+check "append: file now has 2 lines" \
+    bash -c "test \"\$(hdfs dfs -cat /smoke/append.txt | wc -l | tr -d ' ')\" = 2"
+
+echo "[smoketest] === HDFS snapshots ==="
+check "snapshot: allowSnapshot"  hdfs dfsadmin -allowSnapshot /smoke
+# Drop any snap1 left by a previous run so createSnapshot is deterministic.
+hdfs dfs -deleteSnapshot /smoke snap1 2>/dev/null || true
+check "snapshot: createSnapshot" hdfs dfs -createSnapshot /smoke snap1
+check "snapshot: visible under .snapshot" \
+    bash -c "hdfs dfs -ls /smoke/.snapshot | grep -q snap1"
+check "snapshot: post-snapshot append" \
+    bash -c "printf 'line-three\n' | hdfs dfs -appendToFile - /smoke/append.txt"
+check "snapshot: snapshotDiff reports the modification" \
+    bash -c "hdfs snapshotDiff /smoke snap1 . | grep -qE '^M'"
+
+echo "[smoketest] === DistCp over an explicit bracketed IPv6 NameNode URI ==="
+# Exercises hdfs://[fd00:...]:8020 authority parsing end to end (DistCp job
+# submission + the copy MapReduce reading/writing over IPv6 DataNodes).
+NN_V6="hdfs://[fd00:dead:beef::10]:8020"
+hdfs dfs -rm -r -f -skipTrash /smoke/distcp-out 2>/dev/null || true
+# Pre-create the target as a directory (no trailing slash on the DistCp
+# target): with a single source file DistCp copies the file INTO an existing
+# directory, but treats a non-existent or trailing-slash target as the
+# destination file name itself.
+hdfs dfs -mkdir -p /smoke/distcp-out
+check "distcp with [ipv6]:port src+dst" \
+    bash -c "hadoop distcp '${NN_V6}/smoke/payload.txt' '${NN_V6}/smoke/distcp-out'"
+check "distcp: output matches source" \
+    bash -c "diff <(hdfs dfs -cat /smoke/distcp-out/payload.txt) /tmp/payload.txt"
+
+echo "[smoketest] === TeraGen / TeraSort / TeraValidate on YARN over IPv6 ==="
+hdfs dfs -rm -r -f -skipTrash /smoke/tera-in /smoke/tera-out /smoke/tera-rep 2>/dev/null || true
+check "teragen (10k rows)" \
+    bash -c "yarn jar '$EX_JAR' teragen 10000 /smoke/tera-in"
+check "terasort" \
+    bash -c "yarn jar '$EX_JAR' terasort /smoke/tera-in /smoke/tera-out"
+check "teravalidate (no ordering errors)" \
+    bash -c "yarn jar '$EX_JAR' teravalidate /smoke/tera-out /smoke/tera-rep"
+
+echo "[smoketest] === DataNode decommission over IPv6 (refreshNodes) ==="
+# Exclude one live DataNode by its hostname (resolved over AAAA to its IPv6
+# registration address) and confirm the NameNode begins decommissioning it.
+# With replication=2 and two DataNodes the node stays "in progress" (the sole
+# survivor cannot re-replicate to itself), which is enough to prove the exclude
+# entry matched the IPv6-registered DataNode.
+EXCLUDE=/opt/hadoop/etc/hadoop/dfs.hosts.exclude
+DN_HOST=$(hdfs dfsadmin -report | awk '/^Hostname:/{print $2; exit}')
+DN_V6=$(hdfs dfsadmin -report | awk -F'[][]' '/^Name:/{print $2; exit}')
+echo "    excluding DataNode ${DN_HOST} (registered [${DN_V6}])"
+echo "${DN_HOST}" > "${EXCLUDE}"
+check "decommission: refreshNodes accepted" hdfs dfsadmin -refreshNodes
+check "decommission: DataNode enters decommission state" \
+    bash -c '
+      for _ in $(seq 1 20); do
+        if hdfs dfsadmin -report 2>/dev/null \
+            | grep -A6 "'"${DN_V6}"'" \
+            | grep -qiE "Decommission(ed| in progress)"; then
+          exit 0
+        fi
+        sleep 3
+      done
+      exit 1'
+# Restore the DataNode so the cluster is left healthy.
+: > "${EXCLUDE}"
+check "recommission: refreshNodes clears exclude" hdfs dfsadmin -refreshNodes
+
 echo "[smoketest] === Summary ==="
 echo "  $PASS passed, $FAIL failed"
 [[ $FAIL -eq 0 ]] || exit 1

@@ -22,6 +22,9 @@ if [[ "${1:-}" == "hdfs" && "${2:-}" == "namenode" ]]; then
     echo "[entrypoint] Formatting fresh NameNode storage at /data/dfs/name"
     /opt/hadoop/bin/hdfs namenode -format -nonInteractive -force ipv6cluster
   fi
+  # dfs.hosts.exclude must point at a file that exists; create it empty so the
+  # smoke test's decommission step can populate it and run refreshNodes.
+  touch /opt/hadoop/etc/hadoop/dfs.hosts.exclude
 fi
 
 exec /opt/hadoop/bin/"$@"

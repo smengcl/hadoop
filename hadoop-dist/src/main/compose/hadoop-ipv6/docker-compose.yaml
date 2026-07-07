@@ -108,6 +108,15 @@ services:
 
 networks:
   v6net:
+    # Pin the network name so Compose does not prefix the project name with an
+    # underscore ("hadoop-ipv6_v6net"). Docker's embedded DNS derives each
+    # container's FQDN from the network name, and an underscore is illegal in a
+    # DNS hostname (RFC 952/1123): a reverse lookup of a numeric IPv6 address
+    # would otherwise yield "<host>.hadoop-ipv6_v6net", which java.net.URI
+    # rejects ("Illegal character in hostname") - breaking any client that
+    # canonicalizes an IPv6 authority via PTR (e.g. DistCp tasks resolving
+    # hdfs://[fd00:dead:beef::10]:8020).
+    name: v6net
     driver: bridge
     enable_ipv6: true
     ipam:

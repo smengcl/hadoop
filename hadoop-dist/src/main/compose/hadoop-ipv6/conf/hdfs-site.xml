@@ -82,4 +82,13 @@
     <name>dfs.permissions.enabled</name>
     <value>false</value>
   </property>
+
+  <!-- Decommission exclude list, used by the expanded smoke test to exercise
+       node administration over IPv6 (writing a DataNode's numeric IPv6 address
+       into this file and running `dfsadmin -refreshNodes`). entrypoint.sh
+       creates it empty so refreshNodes always has a file to read. -->
+  <property>
+    <name>dfs.hosts.exclude</name>
+    <value>/opt/hadoop/etc/hadoop/dfs.hosts.exclude</value>
+  </property>
 </configuration>
