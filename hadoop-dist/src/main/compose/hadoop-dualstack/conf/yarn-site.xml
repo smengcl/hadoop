@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+-->
+<configuration>
+  <property>
+    <name>yarn.resourcemanager.hostname</name>
+    <value>resourcemanager</value>
+  </property>
+  <property>
+    <name>yarn.resourcemanager.bind-host</name>
+    <value>::</value>
+  </property>
+  <property>
+    <name>yarn.resourcemanager.webapp.address</name>
+    <value>resourcemanager:8088</value>
+  </property>
+
+  <property>
+    <name>yarn.nodemanager.bind-host</name>
+    <value>::</value>
+  </property>
+  <property>
+    <name>yarn.nodemanager.aux-services</name>
+    <value>mapreduce_shuffle</value>
+  </property>
+  <property>
+    <name>yarn.nodemanager.pmem-check-enabled</name>
+    <value>false</value>
+  </property>
+  <property>
+    <name>yarn.nodemanager.vmem-check-enabled</name>
+    <value>false</value>
+  </property>
+
+  <!-- Match the Java AppMaster's CLASSPATH to a real /opt/hadoop layout
+       (otherwise it complains about missing share/hadoop/* jars). -->
+  <property>
+    <name>yarn.application.classpath</name>
+    <value>
+      /opt/hadoop/etc/hadoop,
+      /opt/hadoop/share/hadoop/common/*,
+      /opt/hadoop/share/hadoop/common/lib/*,
+      /opt/hadoop/share/hadoop/hdfs/*,
+      /opt/hadoop/share/hadoop/hdfs/lib/*,
+      /opt/hadoop/share/hadoop/mapreduce/*,
+      /opt/hadoop/share/hadoop/yarn/*,
+      /opt/hadoop/share/hadoop/yarn/lib/*
+    </value>
+  </property>
+
+  <property>
+    <name>mapreduce.jobhistory.address</name>
+    <value>historyserver:10020</value>
+  </property>
+  <property>
+    <name>mapreduce.jobhistory.webapp.address</name>
+    <value>historyserver:19888</value>
+  </property>
+</configuration>

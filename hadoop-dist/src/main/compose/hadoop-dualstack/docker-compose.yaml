@@ -1,0 +1,131 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Dual-stack (IPv4 + IPv6) Hadoop verification harness. Every container has
+# BOTH a static IPv4 and a static IPv6 address; the JVM prefers IPv6 for
+# outbound addressing (see Dockerfile). This proves the IPv6 fixes work when
+# IPv4 co-exists, and that IPv4 is not regressed by them.
+#
+# Network: a dual-stack bridge (enable_ipv6) with an IPv6 ULA subnet and a
+# routable RFC-1918 IPv4 subnet. Hadoop services bind on the IPv6 wildcard
+# [::] (which on Linux with the default net.ipv6.bindv6only=0 also accepts
+# IPv4-mapped connections) and address each other via service hostnames, which
+# Docker DNS resolves to both A and AAAA records.
+#
+# Build prerequisite (run from the repo root):
+#     mvn -DskipTests -Pdist package
+# That produces hadoop-dist/target/hadoop-3.6.0-SNAPSHOT/. Then:
+#     cd hadoop-dist/src/main/compose/hadoop-dualstack
+#     cp -r ../../../target/hadoop-3.6.0-SNAPSHOT .
+#     docker compose build
+#     docker compose up -d
+#     docker compose exec namenode /opt/hadoop/smoketest.sh
+#
+# NOTE: the Docker daemon must have IPv6 enabled (daemon.json:
+#   {"ipv6": true, "ip6tables": true}). See README.md.
+
+services:
+  namenode:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: hadoop-dualstack:dev
+    hostname: namenode
+    command: ["hdfs", "namenode"]
+    ports:
+      - "9870:9870"
+      - "8020:8020"
+    networks:
+      dsnet:
+        ipv4_address: 172.31.98.10
+        ipv6_address: fd00:d0:d0::10
+    volumes:
+      - nn-data:/data/dfs/name
+
+  datanode-1:
+    image: hadoop-dualstack:dev
+    hostname: datanode-1
+    command: ["hdfs", "datanode"]
+    depends_on:
+      - namenode
+    networks:
+      dsnet:
+        ipv4_address: 172.31.98.21
+        ipv6_address: fd00:d0:d0::21
+    volumes:
+      - dn1-data:/data/dfs/data
+
+  datanode-2:
+    image: hadoop-dualstack:dev
+    hostname: datanode-2
+    command: ["hdfs", "datanode"]
+    depends_on:
+      - namenode
+    networks:
+      dsnet:
+        ipv4_address: 172.31.98.22
+        ipv6_address: fd00:d0:d0::22
+    volumes:
+      - dn2-data:/data/dfs/data
+
+  resourcemanager:
+    image: hadoop-dualstack:dev
+    hostname: resourcemanager
+    command: ["yarn", "resourcemanager"]
+    depends_on:
+      - namenode
+    ports:
+      - "8088:8088"
+    networks:
+      dsnet:
+        ipv4_address: 172.31.98.30
+        ipv6_address: fd00:d0:d0::30
+
+  nodemanager-1:
+    image: hadoop-dualstack:dev
+    hostname: nodemanager-1
+    command: ["yarn", "nodemanager"]
+    depends_on:
+      - resourcemanager
+    networks:
+      dsnet:
+        ipv4_address: 172.31.98.41
+        ipv6_address: fd00:d0:d0::41
+
+  historyserver:
+    image: hadoop-dualstack:dev
+    hostname: historyserver
+    command: ["mapred", "historyserver"]
+    depends_on:
+      - namenode
+    ports:
+      - "19888:19888"
+    networks:
+      dsnet:
+        ipv4_address: 172.31.98.50
+        ipv6_address: fd00:d0:d0::50
+
+networks:
+  dsnet:
+    # Pin the network name so Compose does not prefix the project name with an
+    # underscore ("hadoop-dualstack_dsnet"); Docker derives each container's
+    # FQDN from the network name and '_' is illegal in a DNS hostname
+    # (RFC 952/1123), which java.net.URI would reject on a PTR lookup.
+    name: dsnet
+    driver: bridge
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: fd00:d0:d0::/64
+        - subnet: 172.31.98.0/24
+
+volumes:
+  nn-data:
+  dn1-data:
+  dn2-data:
