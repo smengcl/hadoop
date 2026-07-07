@@ -340,6 +340,31 @@ public class TestTaskAttempt{
   }
 
   @Test
+  public void testIsIPRecognizesIPv6Literals() throws Exception {
+    EventHandler eventHandler = mock(EventHandler.class);
+    String[] hosts = new String[] {"host1"};
+    TaskSplitMetaInfo splitInfo =
+        new TaskSplitMetaInfo(hosts, 0, 128 * 1024 * 1024L);
+    TaskAttemptImpl ta =
+        createMapTaskAttemptImplForTest(eventHandler, splitInfo);
+
+    // IPv4 and IPv6 numeric literals must both be treated as IPs so they get
+    // reverse-resolved to a hostname (YARN-1226); hostnames must not.
+    assertTrue(ta.isIP("192.168.1.1"),
+        "IPv4 literal should be detected as an IP");
+    assertTrue(ta.isIP("2001:db8::1"),
+        "bare IPv6 literal should be detected as an IP");
+    assertTrue(ta.isIP("::1"),
+        "IPv6 loopback should be detected as an IP");
+    assertTrue(ta.isIP("fd00:0:0:0:0:0:0:1"),
+        "fully expanded IPv6 literal should be detected as an IP");
+    assertFalse(ta.isIP("host.example.com"),
+        "a hostname must not be detected as an IP");
+    assertFalse(ta.isIP("host1"),
+        "a short hostname must not be detected as an IP");
+  }
+
+  @Test
   public void testMillisCountersUpdate() throws Exception {
     verifyMillisCounters(Resource.newInstance(1024, 1), 512);
     verifyMillisCounters(Resource.newInstance(2048, 4), 1024);

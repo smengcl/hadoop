@@ -41,7 +41,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-import java.util.regex.Pattern;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -116,6 +115,7 @@ import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.security.Credentials;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.security.token.Token;
+import org.apache.hadoop.thirdparty.com.google.common.net.InetAddresses;
 import org.apache.hadoop.util.StringInterner;
 import org.apache.hadoop.util.StringUtils;
 import org.apache.hadoop.yarn.api.ApplicationConstants.Environment;
@@ -1873,11 +1873,13 @@ public abstract class TaskAttemptImpl implements
     return result;
   }
 
-  private static final Pattern ipPattern = // Pattern for matching ip
-    Pattern.compile("\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}");
-  
   protected boolean isIP(String src) {
-    return ipPattern.matcher(src).matches();
+    // Matches both IPv4 and IPv6 numeric literals. An IPv6 literal (e.g.
+    // "2001:db8::1") must be routed through resolveHost() just like IPv4 so
+    // that the host reported by the NodeManager (a canonical hostname) and
+    // the split hosts from HDFS block locations resolve to the same form;
+    // otherwise data-locality matching fails on IPv6 hosts (YARN-1226).
+    return InetAddresses.isInetAddress(src);
   }
 
   private static class ContainerAssignedTransition implements

@@ -707,7 +707,10 @@ public class ContainerManagerImpl extends CompositeService implements
       //hostname found when querying for our hostname with the specified
       //address, combine the specified address with the actual port listened
       //on by the server
-      hostOverride = nmAddress.split(":")[0];
+      //Parse via createSocketAddr (not split(":")) so a bracketed IPv6
+      //literal such as "[2001:db8::1]:8041" yields the host, not "[2001".
+      hostOverride = NetUtils.createSocketAddr(nmAddress,
+          YarnConfiguration.DEFAULT_NM_PORT).getHostString();
     }
 
     // setup node ID

@@ -219,6 +219,31 @@ xferAddr, so neither this property nor its DataNode-side counterpart
 `false` defaults for a pure numeric-IPv6 cluster; hostname mode still
 works if you prefer it.
 
+### Hostname consistency and data locality on IPv6 hosts
+
+For a scheduler to place a task on the node that holds its input, the
+host string the NodeManager registers with the ResourceManager must
+match the host string HDFS reports in the block locations. On IPv6 hosts
+this can silently diverge: `InetAddress.getLocalHost().getHostName()`
+often yields a short name where IPv4 yields the FQDN, and a numeric IPv6
+literal may or may not resolve to a PTR name. When the two sides
+disagree, node/rack matching fails and data locality collapses
+([YARN-1226](https://issues.apache.org/jira/browse/HADOOP-11890)).
+
+Two IPv6 correctness fixes are in place:
+`ContainerManagerImpl` derives the NodeManager host override with
+`NetUtils.createSocketAddr(...).getHostString()` instead of
+`split(":")[0]` (which turned `[2001:db8::1]:8041` into `[2001`), and
+`TaskAttemptImpl.isIP` now recognizes IPv6 literals so a numeric split
+host is reverse-resolved to a hostname exactly as an IPv4 literal is —
+keeping both sides of the locality match in the same form.
+
+For deterministic hostnames regardless of resolver behaviour, set
+explicit FQDNs: `dfs.datanode.hostname` on each DataNode and a matching
+bind/address on each NodeManager, and provision forward and reverse
+(`AAAA` / `PTR`) DNS. This is the recommended production setup and
+removes any dependence on `getCanonicalHostName()` heuristics.
+
 ### MapReduce task JVMs must not pin `java.net.preferIPv4Stack=true`
 
 **File:** `mapred-site.xml` (older releases only)
