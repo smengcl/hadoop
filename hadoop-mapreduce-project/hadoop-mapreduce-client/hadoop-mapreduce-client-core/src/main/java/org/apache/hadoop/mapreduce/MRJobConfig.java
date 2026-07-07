@@ -1044,9 +1044,19 @@ public interface MRJobConfig {
   public static final String MAPRED_REDUCE_ADMIN_JAVA_OPTS =
       "mapreduce.admin.reduce.child.java.opts";
 
+  // Historically this pinned "-Djava.net.preferIPv4Stack=true" on every
+  // map/reduce child JVM. That silently forces IPv4-only sockets on the
+  // task JVMs even when the daemons (which pick up the stack preference from
+  // HADOOP_OPTS) and the MR AM run dual-stack, so on an IPv6-only cluster a
+  // task attempting to reach a DataNode's numeric IPv6 xferAddr fails with
+  // java.nio.channels.UnsupportedAddressTypeException. We no longer pin the
+  // stack preference here; child JVMs inherit the JVM/platform default
+  // (dual-stack), matching daemon behavior. IPv4-only clusters are
+  // unaffected (dual-stack sockets connect to IPv4 addresses normally), and
+  // operators can still set java.net.preferIPv4Stack explicitly via
+  // mapreduce.admin.{map,reduce}.child.java.opts if they need to.
   public static final String DEFAULT_MAPRED_ADMIN_JAVA_OPTS =
-      "-Djava.net.preferIPv4Stack=true " +
-          "-Dhadoop.metrics.log.level=WARN ";
+      "-Dhadoop.metrics.log.level=WARN ";
 
   public static final String MAPRED_ADMIN_USER_SHELL =
       "mapreduce.admin.user.shell";

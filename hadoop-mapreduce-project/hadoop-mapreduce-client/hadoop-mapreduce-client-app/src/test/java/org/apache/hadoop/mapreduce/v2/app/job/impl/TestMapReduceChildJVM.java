@@ -63,7 +63,6 @@ public class TestMapReduceChildJVM {
 
     assertEquals(
       "[" + MRApps.crossPlatformify("JAVA_HOME") + "/bin/java" +
-      " -Djava.net.preferIPv4Stack=true" +
       " -Dhadoop.metrics.log.level=WARN " +
       "  -Xmx820m -Djava.io.tmpdir=" + MRApps.crossPlatformify("PWD") + "/tmp" +
       " -Dlog4j.configuration=container-log4j.properties" +
@@ -129,7 +128,6 @@ public class TestMapReduceChildJVM {
 
     assertEquals(
         "[" + MRApps.crossPlatformify("JAVA_HOME") + "/bin/java" +
-            " -Djava.net.preferIPv4Stack=true" +
             " -Dhadoop.metrics.log.level=WARN " +
             "  -Xmx820m <ADD_OPENS> -Djava.io.tmpdir=" + MRApps.crossPlatformify("PWD") + "/tmp" +
             " -Dlog4j.configuration=container-log4j.properties" +
@@ -171,7 +169,6 @@ public class TestMapReduceChildJVM {
 
     assertEquals(
       "[" + MRApps.crossPlatformify("JAVA_HOME") + "/bin/java" +
-      " -Djava.net.preferIPv4Stack=true" +
       " -Dhadoop.metrics.log.level=WARN " +
       "  -Xmx820m -Djava.io.tmpdir=" + MRApps.crossPlatformify("PWD") + "/tmp" +
       " -Dlog4j.configuration=" + testLogPropertieFile +
