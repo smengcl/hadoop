@@ -41,10 +41,12 @@ ENV HADOOP_HOME=/opt/hadoop \
 # Override the as-shipped configs with the IPv6-targeted ones.
 COPY conf/ /opt/hadoop/etc/hadoop/
 
-# Smoketest is invoked manually inside the namenode container.
+# Smoketest and UI check are invoked manually inside the namenode container.
 COPY smoketest.sh /opt/hadoop/smoketest.sh
+COPY ui-ipv6-check.sh /opt/hadoop/ui-ipv6-check.sh
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /opt/hadoop/smoketest.sh /usr/local/bin/entrypoint.sh \
+RUN chmod +x /opt/hadoop/smoketest.sh /opt/hadoop/ui-ipv6-check.sh \
+       /usr/local/bin/entrypoint.sh \
     && mkdir -p /opt/hadoop/logs /data/dfs/name /data/dfs/data
 
 # Run the JVM dual-stack with an IPv6 preference. The compose harness
