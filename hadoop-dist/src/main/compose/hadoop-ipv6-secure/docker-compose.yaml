@@ -48,10 +48,11 @@ services:
     command: ["hdfs", "namenode"]
     depends_on:
       - kdc
-    # Host port differs from the non-secure hadoop-ipv6 harness (9870) so both
-    # can run at once; the secure smoke test runs inside the container anyway.
+    # Host port differs from the non-secure hadoop-ipv6 harness so both can run
+    # at once; the secure smoke test runs inside the container anyway. The web
+    # UI is HTTPS-only (dfs.http.policy=HTTPS_ONLY), so expose the 9871 port.
     ports:
-      - "19870:9870"
+      - "19871:9871"
     networks:
       v6net:
         ipv6_address: fd00:dead:beef:1::10
@@ -91,9 +92,10 @@ services:
     command: ["yarn", "resourcemanager"]
     depends_on:
       - namenode
-    # Host port differs from the non-secure harness (8088) so both can run.
+    # HTTPS-only web UI (yarn.http.policy=HTTPS_ONLY) is served on 8090; host
+    # port differs from the non-secure harness so both can run at once.
     ports:
-      - "18088:8088"
+      - "18090:8090"
     networks:
       v6net:
         ipv6_address: fd00:dead:beef:1::30

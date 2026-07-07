@@ -44,12 +44,20 @@
     <value>namenode:9870</value>
   </property>
   <property>
+    <name>dfs.namenode.https-address</name>
+    <value>namenode:9871</value>
+  </property>
+  <property>
     <name>dfs.datanode.address</name>
     <value>[::]:9866</value>
   </property>
   <property>
     <name>dfs.datanode.http.address</name>
     <value>[::]:9864</value>
+  </property>
+  <property>
+    <name>dfs.datanode.https.address</name>
+    <value>[::]:9865</value>
   </property>
   <property>
     <name>dfs.datanode.ipc.address</name>
@@ -102,11 +110,12 @@
     <value>authentication</value>
   </property>
 
-  <!-- Keep web on plain HTTP for phase 1 (no TLS keystores); the RPC and
-       data-transfer planes are still fully Kerberos/SASL protected. -->
+  <!-- Serve the NameNode/DataNode web UIs and WebHDFS over TLS only. Combined
+       with the SPNEGO filter in core-site.xml this puts the HDFS web plane on
+       HTTPS + Kerberos over IPv6. TLS material is in ssl-server.xml. -->
   <property>
     <name>dfs.http.policy</name>
-    <value>HTTP_ONLY</value>
+    <value>HTTPS_ONLY</value>
   </property>
   <!-- With SASL data transfer enabled, secure-DN startup normally also
        demands either privileged ports (<1024, i.e. jsvc/root) or HTTPS_ONLY.

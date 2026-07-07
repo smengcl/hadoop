@@ -54,4 +54,36 @@
     <name>hadoop.tmp.dir</name>
     <value>/data/tmp</value>
   </property>
+
+  <!-- ==== SPNEGO web authentication ==== -->
+  <!-- Install the Kerberos SPNEGO authentication filter on every daemon web
+       server (NameNode, DataNode, ResourceManager, NodeManager, JobHistory).
+       Combined with dfs.http.policy / yarn.http.policy = HTTPS_ONLY this makes
+       the whole web plane SPNEGO-authenticated over TLS on IPv6. Without the
+       filter these consoles (e.g. /jmx) are reachable unauthenticated. -->
+  <property>
+    <name>hadoop.http.filter.initializers</name>
+    <value>org.apache.hadoop.security.AuthenticationFilterInitializer</value>
+  </property>
+  <property>
+    <name>hadoop.http.authentication.type</name>
+    <value>kerberos</value>
+  </property>
+  <property>
+    <name>hadoop.http.authentication.kerberos.principal</name>
+    <value>HTTP/_HOST@IPV6.TEST</value>
+  </property>
+  <property>
+    <name>hadoop.http.authentication.kerberos.keytab</name>
+    <value>/keytabs/hadoop.keytab</value>
+  </property>
+  <!-- Shared secret used to sign the SPNEGO auth cookie; must be identical on
+       every daemon. Generated into the image by the Dockerfile. -->
+  <property>
+    <name>hadoop.http.authentication.signature.secret.file</name>
+    <value>/opt/hadoop/etc/hadoop/http-secret</value>
+  </property>
+  <!-- With type=kerberos the SPNEGO handler already rejects un-negotiated
+       requests with HTTP 401; no anonymous-access toggle is needed (that knob
+       only applies to type=simple). -->
 </configuration>

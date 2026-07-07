@@ -161,6 +161,41 @@ hdfs dfs -cat /wc/output/part-m-00000 2>/dev/null | sed 's/^/    /'
 check "map output written to HDFS over IPv6 is correct (hello x2)" \
     bash -c "test \$(hdfs dfs -cat /wc/output/part-m-00000 2>/dev/null | grep -cE '^hello[[:space:]]') -eq 2"
 
+echo "[secure-smoketest] === SPNEGO + HTTPS web authentication over IPv6 ==="
+# The daemon web plane is HTTPS-only (dfs.http.policy/yarn.http.policy) with a
+# Kerberos SPNEGO filter (core-site.xml). curl verifies the server cert against
+# the exported PEM and connects by a SAN-listed hostname, so this exercises TLS
+# + SPNEGO end to end over IPv6.
+CACERT=/opt/hadoop/etc/hadoop/hadoop.cert
+NN_HTTPS="https://namenode:9871"
+
+# Negative: no Kerberos ticket -> HTTP 401 from the SPNEGO filter.
+kdestroy 2>/dev/null || true
+nn_code_noauth=$(curl -s -o /dev/null -w '%{http_code}' --cacert "${CACERT}" "${NN_HTTPS}/jmx")
+check "HTTPS web UI rejects request without a SPNEGO ticket (401)" \
+    bash -c "[ '${nn_code_noauth}' = '401' ]"
+
+# Positive: with a ticket and SPNEGO negotiation -> HTTP 200.
+kinit -kt "${KEYTAB}" "${CLIENT_PRINC}"
+nn_code_auth=$(curl -s -o /dev/null -w '%{http_code}' --negotiate -u : --cacert "${CACERT}" "${NN_HTTPS}/jmx")
+check "HTTPS web UI accepts a SPNEGO-negotiated request (200)" \
+    bash -c "[ '${nn_code_auth}' = '200' ]"
+
+# WebHDFS over HTTPS + SPNEGO: a direct NameNode call listing /smoke.
+check "WebHDFS LISTSTATUS over HTTPS+SPNEGO lists /smoke (IPv6)" \
+    bash -c "curl -s --negotiate -u : --cacert '${CACERT}' '${NN_HTTPS}/webhdfs/v1/smoke?op=LISTSTATUS' | grep -q payload.txt"
+
+# WebHDFS OPEN: the NameNode issues a 307 to a DataNode HTTPS URL carrying an
+# HDFS delegation token (its service id is the bracketed IPv6 NN endpoint);
+# curl -L follows it and the DataNode serves the bytes over TLS. Exercises the
+# NN->DN redirect URL synthesis and delegation-token data read over IPv6.
+echo "[secure-smoketest] --- WebHDFS OPEN redirect target ---"
+curl -s -o /dev/null -D - --negotiate -u : --cacert "${CACERT}" \
+    "${NN_HTTPS}/webhdfs/v1/smoke/payload.txt?op=OPEN" 2>/dev/null \
+    | awk 'tolower($1) ~ /^location:/{print "    " $0}'
+check "WebHDFS OPEN follows NN->DN HTTPS redirect and reads content (IPv6)" \
+    bash -c "diff <(curl -s -L --negotiate -u : --cacert '${CACERT}' '${NN_HTTPS}/webhdfs/v1/smoke/payload.txt?op=OPEN') /tmp/payload.txt"
+
 echo "[secure-smoketest] === Summary ==="
 echo "  $PASS passed, $FAIL failed"
 [[ $FAIL -eq 0 ]] || exit 1

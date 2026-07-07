@@ -40,6 +40,29 @@ COPY conf/krb5.conf /etc/krb5.conf
 # Override the as-shipped Hadoop configs with the IPv6 secure ones.
 COPY conf/ /opt/hadoop/etc/hadoop/
 
+# Generate a self-signed TLS keypair shared by every service. A single cert
+# whose SAN list covers all service hostnames lets any node serve HTTPS and any
+# client verify it by name. Also export the cert in PEM form (for curl
+# --cacert) and a SPNEGO signature secret. Baking these into the image means
+# every container gets the identical keystore/truststore and secret, which is
+# what SPNEGO cookie signing across daemons requires. Test-only credentials.
+RUN keytool -genkeypair -alias hadoop -keyalg RSA -keysize 2048 -validity 3650 \
+      -dname "CN=hadoop-ipv6-secure" \
+      -ext "san=dns:namenode,dns:datanode-1,dns:datanode-2,dns:resourcemanager,dns:nodemanager-1,dns:historyserver,dns:localhost" \
+      -keystore /opt/hadoop/etc/hadoop/keystore.jks \
+      -storepass changeit -keypass changeit \
+    && keytool -exportcert -alias hadoop -rfc \
+      -keystore /opt/hadoop/etc/hadoop/keystore.jks -storepass changeit \
+      -file /opt/hadoop/etc/hadoop/hadoop.cert \
+    && keytool -importcert -noprompt -alias hadoop \
+      -file /opt/hadoop/etc/hadoop/hadoop.cert \
+      -keystore /opt/hadoop/etc/hadoop/truststore.jks -storepass changeit \
+    && head -c 32 /dev/urandom | base64 | tr -d '\n' > /opt/hadoop/etc/hadoop/http-secret \
+    && chmod 644 /opt/hadoop/etc/hadoop/keystore.jks \
+      /opt/hadoop/etc/hadoop/truststore.jks \
+      /opt/hadoop/etc/hadoop/hadoop.cert \
+      /opt/hadoop/etc/hadoop/http-secret
+
 COPY smoketest-secure.sh /opt/hadoop/smoketest-secure.sh
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /opt/hadoop/smoketest-secure.sh /usr/local/bin/entrypoint.sh \

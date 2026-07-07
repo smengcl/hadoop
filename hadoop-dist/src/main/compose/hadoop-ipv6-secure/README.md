@@ -37,8 +37,21 @@ paths work when every host is IPv6-only.
 - A task container reads its input split and writes its output to HDFS via
   SASL data transfer / block tokens against the IPv6 DataNodes.
 
+### Phase 3 — SPNEGO + HTTPS web authentication
+
+- The daemon web plane is HTTPS-only (`dfs.http.policy`/`yarn.http.policy =
+  HTTPS_ONLY`) with a Kerberos SPNEGO filter; the NameNode HTTPS server binds an
+  IPv6 socket (`[fd00:dead:beef:1::10]:9871`).
+- A web request with no ticket is rejected `401`; a SPNEGO-negotiated request
+  (`curl --negotiate`, cert verified against the exported PEM by SAN hostname)
+  returns `200`.
+- WebHDFS `LISTSTATUS` over HTTPS+SPNEGO, and `OPEN` — where the NameNode
+  307-redirects to a DataNode HTTPS URL carrying an HDFS delegation token (whose
+  service id is the bracketed IPv6 NameNode endpoint) and the DataNode serves
+  the bytes over TLS.
+
 The smoke test (`smoketest-secure.sh`) asserts all of the above; a green run
-prints `13 passed, 0 failed`.
+prints `17 passed, 0 failed`.
 
 ## Topology
 
@@ -52,8 +65,8 @@ prints `13 passed, 0 failed`.
 | NodeManager 1 | `nodemanager-1` | `fd00:dead:beef:1::41` |
 | JobHistory | `historyserver` | `fd00:dead:beef:1::50` |
 
-A distinct ULA subnet (`fd00:dead:beef:1::/64`) and host ports (`19870`,
-`18088`, `29888`) let this run alongside the non-secure `hadoop-ipv6` harness.
+A distinct ULA subnet (`fd00:dead:beef:1::/64`) and host ports (`19871`,
+`18090`, `29888`) let this run alongside the non-secure `hadoop-ipv6` harness.
 
 ## Run it
 
@@ -91,9 +104,18 @@ containers mount.
   forward/reverse mismatch — identical on IPv4 — is a Docker artifact, not an
   IPv6 concern, so authorization ACLs are left off; authentication (the IPv6
   path) stays on. A real deployment with consistent PTR records can enable it.
-- **Plain HTTP web UI** (`dfs.http.policy=HTTP_ONLY`). The RPC and
-  data-transfer planes are Kerberos/SASL protected; SPNEGO+HTTPS for the web UI
-  is a later phase.
+- **Self-signed TLS with a shared multi-SAN cert.** The Dockerfile generates one
+  keypair whose SAN list covers every service hostname, plus a truststore and an
+  exported PEM, baked into the image so every container shares identical TLS
+  material (and the shared SPNEGO cookie secret). `curl` verifies the server
+  cert against the PEM and connects by a SAN-listed hostname. A real deployment
+  would use a proper CA and per-host certs; the IPv6 path under test (HTTPS bind
+  + SPNEGO negotiation) is the same.
+- **Generic SPNEGO filter** (`AuthenticationFilterInitializer` +
+  `hadoop.http.authentication.type=kerberos`). This protects every daemon
+  console uniformly (without it `/jmx` is reachable unauthenticated); WebHDFS's
+  own delegation-token handling still takes precedence on the DataNode redirect
+  leg, so token-based reads keep working.
 - **`*.kerberos.principal.pattern = *` for the YARN/MR server principals.**
   When an RPC client validates the server's advertised Kerberos principal it
   otherwise reverse-resolves the server IP to fill in `_HOST`, and Docker's
@@ -126,4 +148,3 @@ containers mount.
   over SASL to the IPv6 DataNodes). The excluded shuffle leg is a native/
   packaging concern that fails identically on IPv4 and is hostname-addressed
   HTTP rather than a numeric-IPv6 code path.
-- **SPNEGO/HTTPS web authentication** for the web UIs is a later addition.

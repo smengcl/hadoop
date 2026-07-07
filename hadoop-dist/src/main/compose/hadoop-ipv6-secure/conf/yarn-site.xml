@@ -29,6 +29,13 @@
     <value>mapreduce_shuffle</value>
   </property>
 
+  <!-- Serve the RM/NM web UIs over TLS only; the SPNEGO filter in core-site.xml
+       adds Kerberos web auth. TLS material is in ssl-server.xml. -->
+  <property>
+    <name>yarn.http.policy</name>
+    <value>HTTPS_ONLY</value>
+  </property>
+
   <!-- DefaultContainerExecutor runs containers as the NodeManager user. It
        works under Kerberos and avoids LinuxContainerExecutor's root/setuid/
        cgroup requirements, which are impractical in this container harness. -->
