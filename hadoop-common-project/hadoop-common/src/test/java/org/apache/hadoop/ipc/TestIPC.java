@@ -412,7 +412,8 @@ public class TestIPC {
   @Timeout(value = 60)
   public void testStandAloneClient() throws IOException {
     Client client = new Client(LongWritable.class, conf);
-    InetSocketAddress address = new InetSocketAddress("127.0.0.1", 10);
+    InetSocketAddress address =
+        new InetSocketAddress(GenericTestUtils.getLoopbackAddressString(), 10);
     try {
       call(client, RANDOM.nextLong(), address, conf);
       fail("Expected an exception to have been thrown");
@@ -659,7 +660,8 @@ public class TestIPC {
     doThrow(new IOException("Injected fault")).when(mockFactory).createSocket();
     Client client = new Client(LongWritable.class, conf, mockFactory);
     
-    InetSocketAddress address = new InetSocketAddress("127.0.0.1", 10);
+    InetSocketAddress address =
+        new InetSocketAddress(GenericTestUtils.getLoopbackAddressString(), 10);
     try {
       call(client, RANDOM.nextLong(), address, conf);
       fail("Expected an exception to have been thrown");
@@ -1713,7 +1715,8 @@ public class TestIPC {
     SocketFactory mockFactory = mock(SocketFactory.class);
     doThrow(new ConnectTimeoutException("fake")).when(mockFactory).createSocket();
     Client client = new Client(LongWritable.class, conf, mockFactory);
-    InetSocketAddress address = new InetSocketAddress("127.0.0.1", 9090);
+    InetSocketAddress address =
+        new InetSocketAddress(GenericTestUtils.getLoopbackAddressString(), 9090);
     try {
       call(client, RANDOM.nextLong(), address, conf);
       fail("Not throwing the SocketTimeoutException");
